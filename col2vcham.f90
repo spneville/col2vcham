@@ -1,3 +1,10 @@
+!######################################################################
+! col2vcham: a simple program to parse the output of a Columbus
+!            MRCI calculation, extract the parameters of a LVC
+!            Hamiltonian, and output these in a format that can be
+!            used directly with the VCHFIT and MCTDH codes.
+!######################################################################
+
 program col2vcham
 
   use constants
@@ -27,8 +34,9 @@ program col2vcham
   call alloc
 
 !----------------------------------------------------------------------
-! Read the Cartesian gradients and NACTs
+! Read the energies, Cartesian gradients and NACTs
 !----------------------------------------------------------------------
+  call rdener
   call rdgrad
   call rdnact
 
@@ -46,6 +54,13 @@ program col2vcham
 ! Transform the gradient and NACT vectors
 !----------------------------------------------------------------------
   call transgrad
+  call transnact
+
+!----------------------------------------------------------------------
+! Write the vchfit guess and MCTDH operator files
+!----------------------------------------------------------------------
+  call wrguess
+  call wroper
 
 !----------------------------------------------------------------------
 ! Finalisation and deallocataion
@@ -146,12 +161,23 @@ contains
 
     implicit none
 
-    ! Energy gradients
+    ! Vertical excitation energies
+    allocate(ener(nsta))
+
+    ! Energy gradients in Cartesians
     allocate(grad(ncoo,nsta))
     grad=0.0d0
 
-    ! NACTs
+    ! NACTs in Cartesians
     allocate(nact(ncoo,nsta,nsta))
+    grad=0.0d0
+
+    ! Energy gradients in normal modes
+    allocate(kappa(nmodes,nsta))
+    grad=0.0d0
+
+    ! NACTs in normal modes
+    allocate(lambda(nmodes,nsta,nsta))
     grad=0.0d0
 
     ! Atomic masses
@@ -197,12 +223,310 @@ contains
 
     implicit none
 
-    print*,"REMEMBER THAT COONM TRANSFORMS FROM ANGSTROM TO Q!"
-    STOP
+    integer                       :: s
+    real(d), dimension(ncoo,nsta) :: tmpvec
+
+!-----------------------------------------------------------------------
+! coonm transforms from angstrom to q, and the gradients have been
+! read in a.u.
+! Hence, we rescale the gradients here
+!-----------------------------------------------------------------------
+    tmpvec=grad*ang2bohr
+
+!-----------------------------------------------------------------------
+! Transform the gradients to the normal mode basis
+!-----------------------------------------------------------------------
+    do s=1,nsta
+       kappa(:,s)=matmul(transpose(nmcoo),tmpvec(:,s))       
+    enddo
+
+!-----------------------------------------------------------------------
+! Convert to eV
+!-----------------------------------------------------------------------
+    kappa=kappa*eh2ev
 
     return
 
   end subroutine transgrad
+
+!######################################################################
+
+  subroutine transnact
+
+    use constants
+    use global
+
+    implicit none
+
+    integer                            :: s1,s2
+    real(d), dimension(ncoo,nsta,nsta) :: tmpvec
+
+!-----------------------------------------------------------------------
+! coonm transforms from angstrom to q, and the NACTs have been
+! read in a.u.
+! Hence, we rescale the NACTs here
+!-----------------------------------------------------------------------
+    tmpvec=nact*ang2bohr
+
+!-----------------------------------------------------------------------
+! Transform the NACTs to the normal mode basis
+!-----------------------------------------------------------------------
+    do s1=1,nsta
+       do s2=1,nsta
+          lambda(:,s1,s2)=matmul(transpose(nmcoo),tmpvec(:,s1,s2))       
+       enddo
+    enddo
+
+!-----------------------------------------------------------------------
+! Convert to eV
+!-----------------------------------------------------------------------
+    lambda=lambda*eh2ev
+
+    return
+
+  end subroutine transnact
+
+!######################################################################
+
+  subroutine wrguess
+    
+    use constants
+    use global
+    use iomod
+
+    implicit none
+
+    integer :: unit,s,s1,s2,m
+
+!----------------------------------------------------------------------
+! Open the vchfit guess file
+!----------------------------------------------------------------------
+    call freeunit(unit)
+    open(unit,file='guess.dat',form='formatted',status='unknown')
+
+!----------------------------------------------------------------------
+! Write the 1st-order intrastate coupling terms (kappa)
+!----------------------------------------------------------------------
+    write(unit,'(a)') '# 1st-order intrastate coupling terms (kappa)'
+    do m=1,nmodes
+       do s=1,nsta
+          write(unit,'(a5,2(x,i2),x,a1,F7.4)') &
+               'kappa',m,s,'=',kappa(m,s)
+       enddo
+    enddo
+
+!----------------------------------------------------------------------
+! Write the 1st-order interstate coupling terms (lambda)
+!----------------------------------------------------------------------
+    write(unit,'(a)') '# 1st-order interstate coupling terms (lambda)'
+    do m=1,nmodes
+       do s1=1,nsta-1
+          do s2=s1+1,nsta
+             write(unit,'(a6,3(x,i2),x,a1,F7.4)') &
+                  'lambda',m,s1,s2,'=',lambda(m,s1,s2)
+          enddo
+       enddo
+    enddo
+
+!----------------------------------------------------------------------
+! Close the vchfit guess file
+!----------------------------------------------------------------------
+    close(unit)
+
+    return
+
+  end subroutine wrguess
+
+!######################################################################
+
+  subroutine wroper
+
+    use constants
+    use global
+    use iomod
+
+    implicit none
+
+    integer            :: unit,m,s,s1,s2,i,j,k,nl,ncurr,fel
+    real(d), parameter :: thrsh=1e-5
+    character(len=2)   :: am,as,as1,as2,afel
+    character(len=90)  :: string
+    character(len=3)   :: amode
+    character(len=8)   :: atmp
+
+!----------------------------------------------------------------------
+! Open the MCTDH operator file
+!----------------------------------------------------------------------
+    call freeunit(unit)
+    open(unit,file='lvc.op',form='formatted',status='unknown')
+
+!----------------------------------------------------------------------
+! Index of the electronic DOF
+!----------------------------------------------------------------------
+    fel=nmodes+1
+    write(afel,'(i2)') fel
+
+!----------------------------------------------------------------------
+! Write the parameter section
+!----------------------------------------------------------------------
+    ! Starting line
+    write(unit,'(/,a)') 'parameter-section'
+
+    ! Frequencies
+    write(unit,'(/,a)') '# Frequencies'
+    do m=1,nmodes
+       write(am,'(i2)') m
+       write(unit,'(a,F8.5,a)') &
+            'omega_'//adjustl(am)//' =',freq(m),' , ev'
+    enddo
+
+    ! Energies
+    write(unit,'(/,a)') '# Energies'
+    do s=1,nsta
+       write(as,'(i2)') s
+       write(unit,'(a,F8.5,a)') &
+            'E'//adjustl(as)//' = ',ener(s),' , ev'
+    enddo
+    
+    ! 1st-order intrastate coupling constants (kappa)
+    write(unit,'(/,a)') '# 1st-order intrastate coupling &
+         constants (kappa)'
+    do s=1,nsta
+       write(as,'(i2)') s
+       do m=1,nmodes
+          if (abs(kappa(m,s)).lt.thrsh) cycle
+          write(am,'(i2)') m
+          write(unit,'(a,F8.5,a)') 'kappa'//trim(adjustl(as))&
+               //'_'//adjustl(am)//' = ',kappa(m,s),' , ev'
+       enddo
+    enddo
+
+    ! 1st-order intrastate coupling constants (lambda)
+    write(unit,'(/,a)') '# 1st-order interstate coupling &
+         constants (lambda)'
+    do s1=1,nsta-1
+       write(as1,'(i2)') s1
+       do s2=s1+1,nsta
+          write(as2,'(i2)') s2
+          do m=1,nmodes
+             if (abs(lambda(m,s1,s2)).lt.thrsh) cycle
+             write(am,'(i2)') m
+             write(unit,'(a,F8.5,a)') 'lambda'//trim(adjustl(as1))&
+               //'_'//trim(adjustl(as2))//'_'//adjustl(am)//&
+               ' = ',lambda(m,s1,s2),' , ev'
+          enddo
+       enddo
+    enddo
+
+    ! Finishing line
+    write(unit,'(/,a)') 'end-parameter-section'
+
+!----------------------------------------------------------------------
+! Write the Hamiltonian section
+!----------------------------------------------------------------------
+    ! Starting line
+    write(unit,'(/,a)') 'hamiltonian-section'
+
+    ! Modes section
+    write(unit,'(/,38a)') ('-',i=1,38)
+    m=0    
+    nl=ceiling((real(nmodes+1))/10.0d0)
+    do i=1,nl
+       ncurr=min(10,nmodes+1-10*(i-1))
+       string='modes|'
+       do k=1,ncurr
+          m=m+1
+          if (m.lt.nmodes+1) then
+             write(amode,'(i3)') m
+             write(atmp,'(a)') ' v'//adjustl(amode)//' '
+             if (m.lt.10) then
+                string=trim(string)//trim(atmp)//'  |'
+             else
+                string=trim(string)//trim(atmp)//' |'
+             endif
+          else
+             string=trim(string)//' el'
+          endif
+       enddo
+       write(unit,'(a)') trim(string)
+    enddo
+    write(unit,'(38a)') ('-',i=1,38)
+
+    ! Kinetic energy operator
+    write(unit,'(/,a)') '# Kinetic energy'
+    do m=1,nmodes
+       write(am,'(i2)') m
+       write(unit,'(a)') &
+            'omega_'//adjustl(am)//'  |'//adjustl(am)//'  KE'
+    enddo
+
+    ! Zeroth-order potential: VEEs
+    write(unit,'(/,a)') '# Zeroth-order potential: VEEs'
+    do s=1,nsta
+       write(as,'(i2)') s
+       write(unit,'(a)') &
+            'E'//adjustl(as)//'  |'//adjustl(afel)&
+            //'  S'//trim(adjustl(as))//'&'//trim(adjustl(as))
+    enddo
+
+    ! Zeroth-order potential: Harmonic oscillators
+    write(unit,'(/,a)') '# Zeroth-order potential: &
+         Harmonic oscillators'
+    do m=1,nmodes
+       write(am,'(i2)') m
+       write(unit,'(a)') &
+            'omega_'//adjustl(am)//'  |'//adjustl(am)//'  q^2'
+    enddo
+
+    ! 1st-order intrastate coupling terms (kappa)
+    write(unit,'(/,a)') '# 1st-order intrastate coupling &
+         constants (kappa)'
+    do m=1,nmodes
+       write(am,'(i2)') m
+       do s=1,nsta
+          if (abs(kappa(m,s)).lt.thrsh) cycle
+          write(as,'(i2)') s
+          write(unit,'(a)') 'kappa'//trim(adjustl(as))&
+               //'_'//adjustl(am)&
+               //'  |'//adjustl(am)//'  q'//'  |'//adjustl(afel)&
+               //'  S'//trim(adjustl(as))//'&'//trim(adjustl(as))
+       enddo
+    enddo
+
+    ! 1st-order interstate coupling terms (lambda)
+    write(unit,'(/,a)') '# 1st-order interstate coupling &
+         constants (lambda)'
+    do m=1,nmodes
+       write(am,'(i2)') m
+       do s1=1,nsta-1
+          write(as1,'(i2)') s1
+          do s2=s1+1,nsta
+             if (abs(lambda(m,s1,s2)).lt.thrsh) cycle
+             write(as2,'(i2)') s2
+             write(unit,'(a)') 'lambda'//trim(adjustl(as1)) &
+                  //'_'//trim(adjustl(as2))//'_'//adjustl(am) &
+                  //'  |'//adjustl(am)//'  q'//'  |'//adjustl(afel)&
+                  //'  S'//trim(adjustl(as1))//'&'//trim(adjustl(as2))
+          enddo
+       enddo
+    enddo
+
+    ! Finishing line
+    write(unit,'(/,a)') 'end-hamiltonian-section'
+
+!----------------------------------------------------------------------
+! End line
+!----------------------------------------------------------------------
+    write(unit,'(/,a)') 'end-operator'
+
+!----------------------------------------------------------------------
+! Close the MCTDH operator file
+!----------------------------------------------------------------------
+    close(unit)
+
+    return
+
+  end subroutine wroper
 
 !######################################################################
 
@@ -221,6 +545,7 @@ contains
 !----------------------------------------------------------------------
 ! Deallocation
 !----------------------------------------------------------------------
+    deallocate(ener)
     deallocate(grad)
     deallocate(nact)
     deallocate(mass)
@@ -231,6 +556,8 @@ contains
     deallocate(freq)
     deallocate(nmcoo)
     deallocate(coonm)
+    deallocate(kappa)
+    deallocate(lambda)
 
     return
     

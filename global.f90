@@ -16,9 +16,10 @@ module global
   real(d), dimension(:), allocatable          :: mass,xcoo0
   character(len=2), dimension(:), allocatable :: atlbl
 
-  ! Gradients and NACTs
-  real(d), dimension(:,:), allocatable        :: grad
-  real(d), dimension(:,:,:), allocatable      :: nact
+  ! Energies, gradients and NACTs
+  real(d), dimension(:), allocatable          :: ener
+  real(d), dimension(:,:), allocatable        :: grad,kappa
+  real(d), dimension(:,:,:), allocatable      :: nact,lambda
 
   ! Normal modes
   real(d), dimension(:,:), allocatable        :: nmcoo,coonm

@@ -88,6 +88,55 @@ contains
 
 !######################################################################
 
+  subroutine rdener
+
+    use constants
+    use iomod
+    use global
+
+    implicit none
+
+    integer            :: unit,n
+    character(len=150) :: filename,string
+
+!----------------------------------------------------------------------
+! Read the Davidson corrected MRCI energies from ciudgsm.drt1.sp
+!----------------------------------------------------------------------
+    ! Open file
+    call freeunit(unit)
+    filename=trim(coldir)//'/LISTINGS/ciudgsm.drt1.sp'
+    open(unit,file=filename,form='formatted',status='old')
+
+    ! Read the Davdson-corrected MRCI energies
+    n=0
+5   read(unit,'(a)',end=999) string
+    if (index(string,'eci+dv3').ne.0) then
+       n=n+1
+       read(string,'(12x,F20.12)') ener(n)
+       if (n.lt.nsta) goto 5
+    else
+       goto 5
+    endif
+
+    ! Close file
+    close(unit)
+
+    ! Excitation energies in eV
+    do n=2,nsta
+       ener(n)=(ener(n)-ener(1))*eh2ev
+    enddo
+    ener(1)=0.0d0
+
+    return
+
+999 continue
+    errmsg='Not all MRCI energies could be found... Quitting!'
+    call error_control
+
+  end subroutine rdener
+    
+!######################################################################
+
   subroutine rdgrad
 
     use constants
@@ -582,7 +631,7 @@ contains
 ! nmcoo transforms from nmodes to coo  x = nmcoo*Q
 ! coonm transforms from coo to nmodes  Q = coonm*x
 !
-! freq in ev, mass in amu
+! freq in ev, mass in amu, x in Angstrom
 !#######################################################################
 
   subroutine nm2xmat
