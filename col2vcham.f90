@@ -495,7 +495,7 @@ contains
     do m=1,nmodes
        write(am,'(i2)') m
        write(unit,'(a)') &
-            'omega_'//adjustl(am)//'  |'//adjustl(am)//'  q^2'
+            '0.5*omega_'//adjustl(am)//'  |'//adjustl(am)//'  q^2'
     enddo
 
     ! 1st-order intrastate coupling terms (kappa)
