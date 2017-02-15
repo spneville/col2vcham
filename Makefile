@@ -15,6 +15,7 @@ OBJ = constants.o \
 	global.o \
 	channels.o \
 	iomod.o \
+	utils.o \
 	parsemod.o \
 	ioqc.o \
 	col2vcham.o

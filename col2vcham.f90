@@ -57,10 +57,18 @@ program col2vcham
   call transnact
 
 !----------------------------------------------------------------------
-! Write the vchfit guess and MCTDH operator files
+! Write the output files:
+!
+! (1) VCHFIT guess file
+! (2) MCTDH operator file
 !----------------------------------------------------------------------
   call wrguess
   call wroper
+
+!----------------------------------------------------------------------
+! Write some information about the LVC Hamiltonian to the log file
+!----------------------------------------------------------------------
+  call wrlvcinfo
 
 !----------------------------------------------------------------------
 ! Finalisation and deallocataion
@@ -296,7 +304,8 @@ contains
 
     implicit none
 
-    integer :: unit,s,s1,s2,m
+    integer            :: unit,s,s1,s2,m
+    real(d), parameter :: thrsh=1e-5
 
 !----------------------------------------------------------------------
 ! Open the vchfit guess file
@@ -310,8 +319,9 @@ contains
     write(unit,'(a)') '# 1st-order intrastate coupling terms (kappa)'
     do m=1,nmodes
        do s=1,nsta
-          write(unit,'(a5,2(x,i2),x,a1,F7.4)') &
-               'kappa',m,s,'=',kappa(m,s)
+          if (abs(kappa(m,s)).lt.thrsh) cycle
+          write(unit,'(a5,2(x,i2),x,a2,F8.5)') &
+               'kappa',m,s,'= ',kappa(m,s)
        enddo
     enddo
 
@@ -322,8 +332,9 @@ contains
     do m=1,nmodes
        do s1=1,nsta-1
           do s2=s1+1,nsta
-             write(unit,'(a6,3(x,i2),x,a1,F7.4)') &
-                  'lambda',m,s1,s2,'=',lambda(m,s1,s2)
+             if (abs(lambda(m,s1,s2)).lt.thrsh) cycle
+             write(unit,'(a6,3(x,i2),x,a2,F8.5)') &
+                  'lambda',m,s1,s2,'= ',lambda(m,s1,s2)
           enddo
        enddo
     enddo
@@ -527,6 +538,84 @@ contains
     return
 
   end subroutine wroper
+
+!######################################################################
+
+  subroutine wrlvcinfo
+
+    use constants
+    use channels
+    use global
+    use utils
+
+    implicit none
+    
+    integer                         :: m,s,s1,s2,i
+    real(d), parameter              :: thrsh=1e-3
+    real(d), dimension(nmodes,nsta) :: maxpar
+    real(d)                         :: fwp
+    integer, dimension(nmodes)      :: indx
+
+    write(ilog,'(/,50a)') ('*', i=1,50)
+    write(ilog,'(11x,a)') 'LVC Hamiltonian Information'
+    write(ilog,'(50a)') ('*', i=1,50)
+
+    maxpar=0.0d0
+
+!----------------------------------------------------------------------
+! Frequency-weighted 1st-order interstate coupling terms (kappa)
+!----------------------------------------------------------------------
+    write(ilog,'(/,a)') '# Frequency-weighted 1st-order interstate'
+    write(ilog,'(a,/)') '# coupling terms (kappa)'
+    do m=1,nmodes
+       do s=1,nsta
+          fwp=kappa(m,s)/freq(m)
+          if (abs(fwp).lt.thrsh) cycle
+          write(ilog,'(a5,2(x,i2),x,a2,F8.5)') &
+               'kappa',m,s,'= ',fwp
+          if (abs(fwp).ge.maxpar(m,s)) maxpar(m,s)=abs(fwp)
+       enddo
+    enddo
+
+!----------------------------------------------------------------------
+! Frequency-weighted 1st-order interstate coupling terms (kappa)
+!----------------------------------------------------------------------
+    write(ilog,'(/,a)') '# Frequency-weighted 1st-order intrastate'
+    write(ilog,'(a,/)') '# coupling terms (lambda)'
+    do m=1,nmodes
+       do s1=1,nsta-1
+          do s2=s1+1,nsta
+             fwp=lambda(m,s1,s2)/freq(m)
+             if (abs(fwp).lt.thrsh) cycle
+             write(ilog,'(a6,3(x,i2),x,a2,F8.5)') &
+                  'lambda',m,s1,s2,'= ',fwp
+             if (abs(fwp).ge.maxpar(m,s1)) maxpar(m,s1)=abs(fwp)
+          enddo
+       enddo
+    enddo
+
+!----------------------------------------------------------------------    
+! Estimation of the relative spectroscopic importance of the normal
+! modes
+!----------------------------------------------------------------------
+    write(ilog,'(/,a)') '# Estimation of the relative spectroscopic &
+         importance'
+    write(ilog,'(a)') '# of the normal modes'
+    write(ilog,'(57a)') ('-', i=1,50)
+    write(ilog,'(2x,3(a,5x))') 'State','Mode',&
+         'Max. freq.-weighted parameter value'
+    write(ilog,'(57a)') ('-', i=1,50)
+    do s=1,nsta
+       call dsortindxa1('D',nmodes,maxpar(:,s),indx)
+       do m=1,nmodes
+          write(ilog,'(i3,7x,i3,7x,F7.4)') s,indx(m),maxpar(indx(m),s)
+       enddo
+       write(ilog,*)
+    enddo
+
+    return
+
+  end subroutine wrlvcinfo
 
 !######################################################################
 
