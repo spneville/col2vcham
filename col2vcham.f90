@@ -378,6 +378,15 @@ contains
     write(afel,'(i2)') fel
 
 !----------------------------------------------------------------------
+! Write the op_define section
+!----------------------------------------------------------------------
+    write(unit,'(a)') 'op_define-section'
+    write(unit,'(a)') 'title'
+    write(unit,'(a)') 'MCTDH operator file created by col2vcham'
+    write(unit,'(a)') 'end-title'
+    write(unit,'(a)') 'end-op_define-section'
+
+!----------------------------------------------------------------------
 ! Write the parameter section
 !----------------------------------------------------------------------
     ! Starting line
