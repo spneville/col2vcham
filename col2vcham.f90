@@ -43,6 +43,11 @@ program col2vcham
   call nm2xmat
 
 !----------------------------------------------------------------------
+! Transform the gradient and NACT vectors
+!----------------------------------------------------------------------
+  call transgrad
+
+!----------------------------------------------------------------------
 ! Finalisation and deallocataion
 !----------------------------------------------------------------------
   call finalise
@@ -185,6 +190,22 @@ contains
 
 !######################################################################
 
+  subroutine transgrad
+
+    use constants
+    use global
+
+    implicit none
+
+    print*,"REMEMBER THAT COONM TRANSFORMS FROM ANGSTROM TO Q!"
+    STOP
+
+    return
+
+  end subroutine transgrad
+
+!######################################################################
+
   subroutine finalise
 
     use channels
@@ -208,6 +229,8 @@ contains
     deallocate(atlbl)
     deallocate(nmlab)
     deallocate(freq)
+    deallocate(nmcoo)
+    deallocate(coonm)
 
     return
     
