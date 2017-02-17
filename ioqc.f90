@@ -2,6 +2,11 @@ module ioqc
 
   implicit none
 
+  save
+
+  integer :: idum
+  logical :: ldum
+
 contains
 
 !######################################################################
@@ -261,7 +266,7 @@ contains
 !          frequency calculation, and sets ityp accordingly:
 !          
 !          ityp = 1 <-> G98
-!
+!                 2 <-> CFOUR
 !######################################################################
   subroutine freqtype
 
@@ -273,6 +278,7 @@ contains
     
     integer            :: unit
     character(len=120) :: string
+    logical            :: dir
 
 !----------------------------------------------------------------------
 ! Initialisation
@@ -280,20 +286,15 @@ contains
     ityp=-1
 
 !----------------------------------------------------------------------
-! Open the frequency file
-!----------------------------------------------------------------------
-    call freeunit(unit)
-    open(unit,file=freqfile,form='formatted',status='old')
-
-!----------------------------------------------------------------------
 ! Determine the quantum chemistry program used for the frequency
 ! calculation
-!----------------------------------------------------------------------    
-    read(unit,'(a)') string
-
-    ! G98
-    if (index(string,'Entering Gaussian System').ne.0) then
+!----------------------------------------------------------------------
+    if (isg98(freqfile)) then
+       ! G98
        ityp=1
+    else if (iscfour(freqfile)) then
+       ! CFOUR
+       ityp=2
     endif
 
 !----------------------------------------------------------------------
@@ -305,6 +306,52 @@ contains
        call error_control
     endif
 
+    return
+
+  end subroutine freqtype
+
+!######################################################################
+
+  function isg98(filename) result(found)
+
+    use constants
+    use iomod
+
+    implicit none
+
+    integer            :: unit
+    character(len=*)   :: filename
+    character(len=120) :: string
+    logical            :: found,dir
+
+!----------------------------------------------------------------------
+! First determine whether freqfile is actually a file.
+! This is necessary as for certain programs, the name of a directory
+! will actually be passed instead
+!----------------------------------------------------------------------
+    inquire(file=trim(filename)//'/.',exist=dir)
+
+    if (dir) then
+       found=.false.
+       return
+    endif
+
+!----------------------------------------------------------------------
+! Open the frequency file
+!----------------------------------------------------------------------
+    call freeunit(unit)
+    open(unit,file=filename,form='formatted',status='old')
+
+!----------------------------------------------------------------------
+! Check whether the calculation was performed using G98
+!----------------------------------------------------------------------
+    read(unit,'(a)') string
+    if (index(string,'Entering Gaussian System').ne.0) then
+       found=.true.
+    else
+       found=.false.
+    endif
+
 !----------------------------------------------------------------------
 ! Close the frequency file
 !----------------------------------------------------------------------
@@ -312,7 +359,42 @@ contains
 
     return
 
-  end subroutine freqtype
+  end function isg98
+
+!######################################################################
+
+  function iscfour(filename) result(found)
+
+    use constants
+    use iomod
+
+    implicit none
+
+    integer            :: unit
+    character(len=*)   :: filename
+    character(len=120) :: string
+    logical            :: found,dir
+
+!----------------------------------------------------------------------
+! First determine whether freqfile is actually a file.
+! This is necessary as for certain programs, the name of a directory
+! will actually be passed instead
+!----------------------------------------------------------------------
+    inquire(file=trim(filename)//'/.',exist=dir)
+
+    if (.not.dir) then
+       found=.false.
+       return
+    endif
+
+!----------------------------------------------------------------------
+! Check to see if the cfour FCM file exists
+!----------------------------------------------------------------------
+    inquire(file=trim(filename)//'/FCM',exist=found)
+
+    return
+
+  end function iscfour
 
 !######################################################################
 
@@ -324,9 +406,21 @@ contains
 
     implicit none
 
+!----------------------------------------------------------------------
+! Initialisation
+!----------------------------------------------------------------------
+    ldum=.false.
+    idum=0
+
+!----------------------------------------------------------------------
+! Read in the reference Cartesian coordinates
+!----------------------------------------------------------------------
     if (ityp.eq.1) then
        ! G98
        call getxcoo_g98
+    else if (ityp.eq.2) then
+       ! CFOUR
+       call getxcoo_cfour
     endif
 
     return
@@ -365,7 +459,7 @@ contains
     do i=1,natm
        read(unit,'(14x,i2,18x,3F12.6)') atnum(i),(xcoo0(j), j=i*3-2,i*3)
        atlbl(i)=num2lbl(atnum(i))
-       mass(i*3-2:i*3)=num2mass(atnum(i))       
+       mass(i*3-2:i*3)=num2mass(atnum(i))
     enddo
 
     ! Convert to Bohr
@@ -384,6 +478,78 @@ contains
     call error_control
 
   end subroutine getxcoo_g98
+
+!######################################################################
+
+  subroutine getxcoo_cfour
+
+    use constants
+    use iomod
+    use global
+
+    implicit none
+
+    integer            :: unit,i,n
+    logical            :: found
+    character(len=120) :: string
+    character(len=2)   :: atmp
+
+!----------------------------------------------------------------------
+! First check to make sure that the cfour.log file exists
+!----------------------------------------------------------------------
+    inquire(file=trim(freqfile)//'/cfour.log',exist=found)
+
+    if (.not.found) then
+       errmsg='The CFOUR log file is assumed to be named cfour.log. &
+            This file could not be found in: '//trim(freqfile)
+       call error_control
+    endif
+
+!----------------------------------------------------------------------
+! Open the CFOUR log file
+!----------------------------------------------------------------------
+    call freeunit(unit)
+    open(unit,file=trim(freqfile)//'/cfour.log',form='formatted',&
+         status='old')
+
+!----------------------------------------------------------------------
+! Read the reference Cartesian coordinates from the CFOUR log file
+!----------------------------------------------------------------------
+5   read(unit,'(a)',end=999) string
+    if (index(string,'Coordinates (in bohr)').eq.0) goto 5
+
+    do i=1,2
+       read(unit,*)
+    enddo
+
+    n=0
+10  read(unit,'(a)') string
+    if (index(string,'---').eq.0) then
+       if (string(6:6).ne.'X') then
+          n=n+1
+          read(string,'(5x,a2,8x,i2,3x,3(F15.8))') &
+               atlbl(n),atnum(n),(xcoo0(i), i=n*3-2,n*3)
+          mass(n*3-2:n*3)=num2mass(atnum(n))
+       else
+          ldum=.true.
+          idum=n+1
+       endif
+       goto 10
+    endif
+
+!----------------------------------------------------------------------
+! Close the CFOUR log file
+!----------------------------------------------------------------------
+    close(unit)
+
+    return
+
+999 continue
+    errmsg='The Cartesian coordinates could not be found in: '&
+         //trim(freqfile)//'/cfour.log'
+    call error_control
+
+  end subroutine getxcoo_cfour
 
 !######################################################################
 
@@ -427,6 +593,8 @@ contains
        mass=1.00794d0
     else if (num.eq.6) then
        mass=12.0107d0
+    else if (num.eq.7) then
+       mass=14.0067d0
     else
        write(errmsg,'(a,x,i2,x,a)') 'The atomic number',num,&
             'is not supported. See function num2mass.'
@@ -453,6 +621,9 @@ contains
     if (ityp.eq.1) then
        ! G98
        call getmodes_g98
+    else if (ityp.eq.2) then
+       ! CFOUR
+       call getmodes_cfour
     endif
 
 !----------------------------------------------------------------------
@@ -563,7 +734,7 @@ contains
     enddo
 
 !-----------------------------------------------------------------------
-! Convert frequencies to ev
+! Convert frequencies to eV
 !-----------------------------------------------------------------------
     do i=1,nmodes
        freq(i)=freq(i)*invcm2ev
@@ -585,6 +756,332 @@ contains
     call error_control
 
   end subroutine getmodes_g98
+
+!######################################################################
+
+  subroutine getmodes_cfour
+
+    use constants
+    use iomod
+    use global
+
+    implicit none
+
+    integer                           :: unit,i,j,k,lim1,lim2
+    real(d), dimension(ncoo,ncoo)     :: hess
+    real(d), dimension(ncoo+3,ncoo+3) :: dumhess
+    real(d), dimension(nmodes)        :: cffreq
+    character(len=120)                :: string
+
+!**********************************************************************
+! Note that cfour outputs the normal mode vectors to only a few
+! decimal places. Therefore, we construct the normal modes ourself
+! from the Hessian, which is written to a decent level of precision
+! in the FCMFINAL file.
+!**********************************************************************
+
+
+!----------------------------------------------------------------------
+! Read the Hessian from the FCMFINAL file
+!----------------------------------------------------------------------
+    ! Open the FCMFINAL file
+    call freeunit(unit)
+    open(unit,file=trim(freqfile)//'/FCMFINAL',form='formatted',&
+         status='old')
+
+    ! Read the FCMFINAL file
+    read(unit,*)
+
+    if (ldum) then
+       ! Dummy atom present
+       ! (1) Read the Hessian including the dummy atom
+       do i=1,ncoo+3
+          do j=1,natm+1
+             read(unit,'(3F20.10)') (dumhess(i,k), k=j*3-2,j*3)
+          enddo
+       enddo
+       ! (2) Remove the dummy atom contributions
+       lim1=idum*3-2
+       lim2=idum*3
+       do i=1,ncoo+3
+          if (i.ge.lim1.and.i.le.lim2) cycle
+          do j=1,ncoo+3
+             if (j.ge.lim1.and.j.le.lim2) cycle
+             if (i.lt.lim1.and.j.lt.lim1) then
+                hess(i,j)=dumhess(i,j)
+             else if (i.lt.lim1.and.j.ge.lim1) then
+                hess(i,j-3)=dumhess(i,j)
+             else if (i.ge.lim1.and.j.lt.lim1) then
+                hess(i-3,j)=dumhess(i,j)
+             else if (i.ge.lim1.and.j.ge.lim1) then
+                hess(i-3,j-3)=dumhess(i,j)
+             endif
+          enddo
+       enddo
+    else
+       ! No dummy atom
+       do i=1,ncoo
+          do j=1,natm
+             read(unit,'(3F20.10)') (hess(i,k), k=j*3-2,j*3)
+          enddo
+       enddo
+    endif
+
+    ! Close the FCMFINAL file
+    close(unit)
+
+!----------------------------------------------------------------------
+! Calculate the normal mode vectors from the Hessian
+!----------------------------------------------------------------------
+    call hess2nm(hess)
+
+!----------------------------------------------------------------------
+! Consistency check: read the CFOUR log file frequencies and make sure
+! that our frequencies match
+!----------------------------------------------------------------------    
+    call freeunit(unit)
+    open(unit,file=trim(freqfile)//'/cfour.log')
+
+5   read(unit,'(a)',end=888) string
+    if (index(string,'rotational projection').eq.0) goto 5
+
+    do i=1,7
+       read(unit,*)
+    enddo
+       
+    do i=1,nmodes
+       read(unit,'(24x,F10.4)') cffreq(i)
+       if (abs(cffreq(i)-freq(i)/invcm2ev).gt.1.0d0) then
+          errmsg='Mismatch between calculated frequencies:'
+          write(errmsg(len_trim(errmsg):),'(2(x,F10.4))') &
+               cffreq(i),freq(i)/invcm2ev
+          call error_control
+       endif
+    enddo
+
+    close(unit)
+
+!----------------------------------------------------------------------
+! Read the symmetry labels from the CFOUR log file
+!----------------------------------------------------------------------
+    call freeunit(unit)
+    open(unit,file=trim(freqfile)//'/cfour.log')
+
+10  read(unit,'(a)',end=999) string
+    if (index(string,'Normal Coordinate Analysis').eq.0) goto 10
+
+    do i=1,12
+       read(unit,*)
+    enddo
+
+    do i=1,nmodes
+       read(unit,'(8x,a3)') nmlab(i)
+    enddo
+
+    close(unit)
+
+    return
+
+888 continue
+    errmsg='The frequencies could not be found in: '&
+         //trim(freqfile)//'/cfour.log'
+    call error_control
+
+999 continue
+    errmsg='The Normal Coordinate Analysis section couldn''t &
+         be found in: '//trim(freqfile)//'/cfour.log'
+    call error_control
+
+  end subroutine getmodes_cfour
+
+!######################################################################
+
+  subroutine hess2nm(hess)
+
+    use constants
+    use iomod
+    use global
+    use utils
+
+    implicit none
+
+    integer                       :: i,j,k,l,e2,error,unit
+    integer, dimension(ncoo)      :: indx
+    real(d), dimension(ncoo,ncoo) :: hess,proj,phess,eigvec
+    real(d), dimension(ncoo)      :: eigval
+    real(d), dimension(3*ncoo)    :: work
+
+!----------------------------------------------------------------------
+! Mass-weight the Hessian
+!----------------------------------------------------------------------
+    do i=1,ncoo
+       do j=1,ncoo
+          hess(i,j)=hess(i,j)/sqrt(mass(i)*mass(j))
+       enddo
+    enddo
+
+!----------------------------------------------------------------------
+! Project out the rotational and translational DOFs
+!----------------------------------------------------------------------
+    ! Construct the projector onto the complement of the
+    ! translation-rotation subspace
+    call rtproj(proj)
+
+    ! Project out the rotational and translational DOFs
+    phess=matmul(proj,matmul(hess,proj))
+
+!----------------------------------------------------------------------
+! Diagonalise the projected mass-weighted Hessian
+!----------------------------------------------------------------------
+    eigvec=phess
+    e2=3*ncoo
+
+    call dsyev('V','U',ncoo,eigvec,ncoo,eigval,work,e2,error)
+
+    if (error.ne.0) then
+       errmsg='Diagonalisation of the projected Hessian failed in &
+            subroutine hess2nm'
+       call error_control
+    endif
+
+!----------------------------------------------------------------------
+! Sort the normal modes by absolute eigenvalues
+!----------------------------------------------------------------------
+    eigval=abs(eigval)
+    call dsortindxa1('A',ncoo,eigval,indx)
+
+!----------------------------------------------------------------------
+! Frequencies in ev
+!----------------------------------------------------------------------
+    do i=7,ncoo
+       freq(i-6)=sqrt(abs(eigval(indx(i))))*5140.8096d0*invcm2ev
+    enddo
+
+!-----------------------------------------------------------------------
+! Normal mode vectors
+! (Scale to mass-weighted x to obtain true normal mode vectors)
+!-----------------------------------------------------------------------
+    do i=7,ncoo
+       nmcoo(:,i-6)=eigvec(:,indx(i))       
+    enddo
+
+    do i=1,ncoo
+       nmcoo(i,:)=nmcoo(i,:)*sqrt(mass(j))
+    enddo
+
+    return
+
+  end subroutine hess2nm
+
+!######################################################################
+
+  subroutine rtproj(proj)
+
+    use constants
+    use iomod
+    use global
+
+    implicit none
+
+    integer                       :: i,j,k,l
+    integer, dimension(6)         :: ipiv
+    integer                       :: info
+    real(d), dimension(ncoo,ncoo) :: proj,rmat
+    real(d), dimension(6,ncoo)    :: rtvec
+    real(d), dimension(6,6)       :: smat,invsmat
+    real(d), dimension(ncoo,6)    :: bmat
+    real(d), dimension(6)         :: work
+    logical(kind=4)               :: lcheck
+
+!------------------------------------------------------------------
+! Initialise arrays
+!------------------------------------------------------------------
+    rtvec=0.0d0
+
+!------------------------------------------------------------------
+! Vectors 1-3: translation along the three Cartesian axes
+!------------------------------------------------------------------
+    ! Loop over the translational DOFs
+    do i=1,3
+       ! Construct the vector for the current DOF
+       do j=1,natm
+          k=j*3-3+i
+          rtvec(i,k)=sqrt(mass(j*3))
+       enddo
+    enddo
+
+!------------------------------------------------------------------
+! Vectors 4-6: infinitesimal displacements corresponding to
+!              rotation about the three Cartesian axes
+!------------------------------------------------------------------
+    ! Rotation about the x-axis
+    do i=1,natm
+       j=i*3-1
+       k=i*3
+       rtvec(4,j)=sqrt(mass(i*3))*xcoo0(k)
+       rtvec(4,k)=-sqrt(mass(i*3))*xcoo0(j)
+    enddo
+
+    ! Rotation about the y-axis
+    do i=1,natm
+       j=i*3-2
+       k=i*3
+       rtvec(5,j)=-sqrt(mass(i*3))*xcoo0(k)
+       rtvec(5,k)=sqrt(mass(i*3))*xcoo0(j)
+    enddo
+
+    ! Rotation about the z-axis
+    do i=1,natm
+       j=i*3-2
+       k=i*3-1
+       rtvec(6,j)=sqrt(mass(i*3))*xcoo0(k)
+       rtvec(6,k)=-sqrt(mass(i*3))*xcoo0(j)
+    enddo
+
+!------------------------------------------------------------------
+! Calculate the projector R onto the translational and rotational
+! DOFs using R=b*S^-1*b^T, where S=vec^T*vec.
+!
+! Here, R <-> rmat, S <-> smat, b <-> bmat (matrix of vectors)
+!------------------------------------------------------------------
+    ! Construct the b-matrix
+    bmat=transpose(rtvec)
+
+    ! Calculate the S-matrix
+    smat=matmul(transpose(bmat),bmat)
+
+    ! Invert the S-matrix
+    invsmat=smat
+    call dgetrf(6,6,invsmat,6,ipiv,info)
+    if (info.ne.0) then
+       errmsg='LU factorisation of the S-matrix failed'
+       call error_control
+    endif
+    call dgetri(6,invsmat,6,ipiv,work,6,info)
+    if (info.ne.0) then
+       errmsg='Diagonalisation of the S-matrix failed'
+       call error_control       
+    endif
+    
+    ! Calculate the projection matrix R <-> rmat
+    rmat=matmul(bmat,matmul(invsmat,transpose(bmat)))
+
+!------------------------------------------------------------------
+! Construct the projector onto the complement of the
+! translation-rotation subspace: P=1-R
+!------------------------------------------------------------------
+    ! 1
+    proj=0.0d0
+    do i=1,ncoo
+       proj(i,i)=1.0d0
+    enddo
+
+    ! 1-R
+    proj=proj-rmat
+
+    return
+
+  end subroutine rtproj
 
 !######################################################################
 

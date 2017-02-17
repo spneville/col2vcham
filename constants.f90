@@ -11,6 +11,7 @@ module constants
   real(d), parameter    :: ang2bohr=1.88972612d0
   real(d), parameter    :: invcm2ev=1.23985e-4_d
   real(d), parameter    :: eh2ev=27.2113845d0
+  real(d), parameter    :: c_au=137.0359991d0
   complex(d), parameter :: ci=(0._d,1._d)
   complex(d), parameter :: czero=(0._d,0._d)
   complex(d), parameter :: cone=(1._d,0._d)

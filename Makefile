@@ -11,6 +11,9 @@ CC	= gcc
 F90OPTS = -cpp -g -ffixed-line-length-none -ffree-line-length-none -fopenmp -O3 -fbacktrace
 CCOPTS  = -g -O0
 
+# External libraries
+LIBS= -lblas -llapack
+
 OBJ = constants.o \
 	global.o \
 	channels.o \
@@ -21,7 +24,7 @@ OBJ = constants.o \
 	col2vcham.o
 
 col2vcham: $(OBJ)
-	$(F90) $(F90OPTS) $(OBJ) -o col2vcham
+	$(F90) $(F90OPTS) $(OBJ) $(LIBS) -o col2vcham
 	rm -f *.o *~ *.mod 2>/dev/null
 
 %.o: %.f90
