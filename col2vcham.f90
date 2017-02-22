@@ -21,7 +21,7 @@ program col2vcham
 !----------------------------------------------------------------------
 ! Read the command line arguments
 !----------------------------------------------------------------------
-  call rdinp
+  call rdinput
 
 !----------------------------------------------------------------------
 ! Determine the system dimensions
@@ -61,9 +61,11 @@ program col2vcham
 !
 ! (1) VCHFIT guess file
 ! (2) MCTDH operator file
+! (3) LVC data file for use with the PLTLVC program
 !----------------------------------------------------------------------
   call wrguess
   call wroper
+  call wrdatfile
 
 !----------------------------------------------------------------------
 ! Write some information about the LVC Hamiltonian to the log file
@@ -98,7 +100,7 @@ contains
 
 !######################################################################
 
-  subroutine rdinp
+  subroutine rdinput
 
     use constants
     use global
@@ -107,8 +109,8 @@ contains
 
     implicit none
 
-    integer            :: i,n
-    character(len=120) :: string1,string2
+    integer            :: n
+    character(len=120) :: string
 
 !----------------------------------------------------------------------
 ! Initialisation
@@ -123,16 +125,16 @@ contains
 5   continue
     
     n=n+1
-    call getarg(n,string1)
+    call getarg(n,string)
        
-    if (string1.eq.'-d') then
+    if (string.eq.'-d') then
        n=n+1
        call getarg(n,coldir)
-    else if (string1.eq.'-f') then
+    else if (string.eq.'-f') then
        n=n+1
        call getarg(n,freqfile)
     else
-       write(6,'(/,2(2x,a),/)') 'Unknown keyword:',trim(string1)
+       write(6,'(/,2(2x,a),/)') 'Unknown keyword:',trim(string)
        stop
     endif
 
@@ -159,7 +161,7 @@ contains
 
     return
  
-  end subroutine rdinp
+  end subroutine rdinput
 
 !######################################################################
 
@@ -625,6 +627,66 @@ contains
     return
 
   end subroutine wrlvcinfo
+
+!######################################################################
+
+  subroutine wrdatfile
+
+    use constants
+    use iomod
+    use global
+
+    implicit none
+
+    integer :: unit,m,s,s1,s2
+
+!----------------------------------------------------------------------
+! Open the lvc.dat file
+!----------------------------------------------------------------------
+    call freeunit(unit)
+    open(unit,file='lvc.dat',form='unformatted',status='unknown')
+
+!----------------------------------------------------------------------
+! Write the lvc.dat file
+!----------------------------------------------------------------------
+    ! Dimensions
+    write(unit) nmodes
+    write(unit) nsta
+
+    ! Frequencies
+    do m=1,nmodes
+       write(unit) freq(m)
+    enddo
+
+    ! Energies
+    do s=1,nsta
+       write(unit) ener(s)
+    enddo
+
+    ! 1st-order intrastate coupling terms (kappa)
+    do m=1,nmodes
+       do s=1,nsta
+          write(unit) kappa(m,s)
+       enddo
+    enddo
+    
+    ! 1st-order interstate coupling terms (lambda)
+    do m=1,nmodes
+       do s1=1,nsta-1
+          do s2=s1+1,nsta
+             write(unit) lambda(m,s1,s2)
+          enddo
+       enddo
+    enddo
+
+!----------------------------------------------------------------------
+! Close the lvc.dat file
+!----------------------------------------------------------------------
+    close(unit)
+    
+    return
+
+  end subroutine wrdatfile
 
 !######################################################################
 

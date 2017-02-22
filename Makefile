@@ -23,8 +23,19 @@ OBJ = constants.o \
 	ioqc.o \
 	col2vcham.o
 
+OBJ_PLTLVC = constants.o \
+	global.o \
+	channels.o \
+	iomod.o \
+	pltmod.o \
+	pltlvc.o
+
 col2vcham: $(OBJ)
 	$(F90) $(F90OPTS) $(OBJ) $(LIBS) -o col2vcham
+	rm -f *.o *~ *.mod 2>/dev/null
+
+pltlvc: $(OBJ_PLTLVC)
+	$(F90) $(F90OPTS) $(OBJ_PLTLVC) $(LIBS) -o pltlvc
 	rm -f *.o *~ *.mod 2>/dev/null
 
 %.o: %.f90

@@ -197,7 +197,8 @@ contains
     character(len=2)   :: asta1,asta2
 
 !----------------------------------------------------------------------
-! Read the NACTS in terms of the Cartesian coordinates
+! Read the NACTs (multiplied by the energy difference!) in terms of 
+! the Cartesian coordinates
 !----------------------------------------------------------------------
     call freeunit(unit)
 
@@ -219,7 +220,7 @@ contains
           enddo
 
           ! Fill in the lower triangle
-          nact(:,s2,s1)=-nact(:,s1,s2)
+          nact(:,s2,s1)=nact(:,s1,s2)
 
           ! Close the gradient file
           close(unit)
