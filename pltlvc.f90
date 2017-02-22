@@ -341,12 +341,20 @@ contains
     ! Configuration
     write(unit,'(a)') 'set size square'
     write(unit,'(a)') 'unset key'
+    write(unit,'(a)') 'monitorSize=system("xrandr | awk ''/\*/{sub(/x/,\",\");print $1;exit}''")'
+    write(unit,'(a,/)') 'set terminal x11 size @monitorSize'
 
     ! Axis labels
     write(unit,'(a)') 'set ylabel ''Energy (eV)'''
     write(am,'(i2)') mplt
     string='set xlabel ''Q'//trim(adjustl(am))//''''
-    write(unit,'(a)') trim(string)
+    write(unit,'(a,/)') trim(string)
+
+    ! Ranges
+    write(unit,'(2(a,F6.2),a,/)') 'set xrange [',qi,':',qf,']'
+    if (ei.eq.-999.0d0) ei=minval(surf)
+    if (ef.eq.-999.0d0) ef=maxval(surf)
+    write(unit,'(2(a,F6.2),a,/)') 'set yrange [',ei,':',ef,']'
 
     ! State 1
     string='plot '''//trim(datfile)//''' u 1:'
@@ -363,7 +371,7 @@ contains
     enddo
 
     ! pause -1
-    write(unit,'(a)') 'pause -1'
+    write(unit,'(/,a)') 'pause -1'
 
     close(unit)
 
