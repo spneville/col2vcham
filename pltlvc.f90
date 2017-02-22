@@ -30,9 +30,14 @@ program pltlvc
   call rddatfile
 
 !----------------------------------------------------------------------
-! Make the plot
+! Calculate the surfaces
 !----------------------------------------------------------------------
-  call plotsurf
+  call calcsurf
+
+!----------------------------------------------------------------------
+! Write the gnuplot file and plot the surfaces to the screen
+!----------------------------------------------------------------------
+  call wrgnuplot
 
 !----------------------------------------------------------------------
 ! Finalisation
@@ -76,6 +81,10 @@ contains
     ! Plotting mode
     mplt=-1
 
+    ! Initial and final states
+    si=-1
+    sf=-1
+
     ! Coordinate interval
     qi=-7.0d0
     qf=+7.0d0
@@ -85,7 +94,14 @@ contains
     ef=-999.0d0
 
     ! No. points
-    npnts=200
+    npnts=1000
+
+    ! eps output
+    leps=.false.
+
+    ! Surface type: 1 <-> adiabatic potentials
+    !               2 <-> diabatic potentials
+    surftyp=1
 
 !----------------------------------------------------------------------
 ! Exit if no arguments have been given
@@ -126,6 +142,20 @@ contains
        n=n+1
        call getarg(n,string2)
        read(string2,*) npnts
+    else if (string1.eq.'-si') then
+       n=n+1
+       call getarg(n,string2)
+       read(string2,*) si
+    else if (string1.eq.'-sf') then
+       n=n+1
+       call getarg(n,string2)
+       read(string2,*) sf
+    else if (string1.eq.'-eps') then
+       leps=.true.
+    else if (string1.eq.'-adiab') then
+       surftyp=1
+    else if (string1.eq.'-diab') then
+       surftyp=2
     else
        errmsg='Unknown keyword: '//trim(string1)
        call error_control
@@ -274,7 +304,7 @@ contains
 
 !######################################################################
 
-  subroutine plotsurf
+  subroutine calcsurf
 
     use constants
     use iomod
@@ -304,7 +334,7 @@ contains
        q(mplt)=qi+(i-1)*dq
 
        ! Current set of energies
-       surf(i,:)=adiabpot(q)
+       surf(i,:)=surface(q)
 
     enddo
 
@@ -329,60 +359,36 @@ contains
 !----------------------------------------------------------------------
     close(unit)
 
-!----------------------------------------------------------------------
-! Write the gnuplot file
-!----------------------------------------------------------------------
-    write(am,'(i2)') mplt
-    filename='plot_q'//trim(adjustl(am))//'.gnu'
+    return
+
+  end subroutine calcsurf
+
+!######################################################################
+
+  function surface(q) result(func)
+
+    use constants
+    use global
+    use pltmod
+
+    implicit none
     
-    call freeunit(unit)
-    open(unit,file=filename,form='formatted',status='unknown')
+    real(d), dimension(nmodes) :: q
+    real(d), dimension(nsta)   :: func
 
-    ! Configuration
-    write(unit,'(a)') 'set size square'
-    write(unit,'(a)') 'unset key'
-    write(unit,'(a)') 'monitorSize=system("xrandr | awk ''/\*/{sub(/x/,\",\");print $1;exit}''")'
-    write(unit,'(a,/)') 'set terminal x11 size @monitorSize'
+    select case(surftyp)
 
-    ! Axis labels
-    write(unit,'(a)') 'set ylabel ''Energy (eV)'''
-    write(am,'(i2)') mplt
-    string='set xlabel ''Q'//trim(adjustl(am))//''''
-    write(unit,'(a,/)') trim(string)
+    case(1) ! adiabatic potentials
+       func=adiabpot(q)
 
-    ! Ranges
-    write(unit,'(2(a,F6.2),a,/)') 'set xrange [',qi,':',qf,']'
-    if (ei.eq.-999.0d0) ei=minval(surf)
-    if (ef.eq.-999.0d0) ef=maxval(surf)
-    write(unit,'(2(a,F6.2),a,/)') 'set yrange [',ei,':',ef,']'
+    case(2) ! diabatic potentials
+       func=diabpot(q)
 
-    ! State 1
-    string='plot '''//trim(datfile)//''' u 1:'
-    write(as,'(i2)') 2
-    string=trim(string)//trim(adjustl(as))//' w l lw 3'
-    write(unit,'(a)') trim(string)
-
-    ! States 2-nsta
-    do s=2,nsta
-       string='replot '''//trim(datfile)//''' u 1:'
-       write(as,'(i2)') s
-       string=trim(string)//trim(adjustl(as))//' w l lw 3'
-       write(unit,'(a)') trim(string)
-    enddo
-
-    ! pause -1
-    write(unit,'(/,a)') 'pause -1'
-
-    close(unit)
-
-!----------------------------------------------------------------------
-! Plot the data to screen
-!----------------------------------------------------------------------
-    call system('gnuplot '//trim(filename))
+    end select
 
     return
 
-  end subroutine plotsurf
+  end function surface
 
 !######################################################################
 
@@ -394,11 +400,75 @@ contains
 
     implicit none
 
-    integer                       :: m,s,s1,s2,e2,error
+    integer                       :: e2,error
     real(d), dimension(nmodes)    :: q
     real(d), dimension(nsta)      :: v
     real(d), dimension(nsta,nsta) :: w
     real(d), dimension(3*nsta)    :: work
+
+!----------------------------------------------------------------------
+! Construct the LVC potential
+!----------------------------------------------------------------------
+    w=lvcpot(q)
+
+!----------------------------------------------------------------------
+! Diagonalise the LVC potential to yield the model adiabatic
+! potentials
+!----------------------------------------------------------------------
+    e2=3*nsta
+    call dsyev('V','U',nsta,w,nsta,v,work,e2,error)
+
+    if (error.ne.0) then
+       errmsg='Diagonalisation of the LVC potential failed'
+       call error_control
+    endif
+
+    return
+
+  end function adiabpot
+
+!######################################################################
+
+  function diabpot(q) result(wii)
+
+    use constants
+    use global
+
+    implicit none
+
+    integer                       :: i
+    real(d), dimension(nmodes)    :: q
+    real(d), dimension(nsta)      :: wii
+    real(d), dimension(nsta,nsta) :: w
+
+!----------------------------------------------------------------------
+! Construct the LVC potential
+!----------------------------------------------------------------------
+    w=lvcpot(q)
+
+!----------------------------------------------------------------------
+! Return the on-diagonal elements
+!----------------------------------------------------------------------
+    do i=1,nsta
+       wii(i)=w(i,i)
+    enddo
+
+    return
+
+  end function diabpot
+
+!######################################################################
+
+  function lvcpot(q) result(w)
+
+    use constants
+    use global
+
+    implicit none
+
+    integer                       :: m,s,s1,s2
+    real(d), dimension(nmodes)    :: q
+    real(d), dimension(nsta,nsta) :: w
 
 !----------------------------------------------------------------------
 ! Initialisation of the LVC potential
@@ -440,21 +510,109 @@ contains
        enddo
     enddo
 
-!----------------------------------------------------------------------
-! Diagonalise the LVC potential to yield the model adiabatic
-! potentials
-!----------------------------------------------------------------------
-    e2=3*nsta
-    call dsyev('V','U',nsta,w,nsta,v,work,e2,error)
+    return
 
-    if (error.ne.0) then
-       errmsg='Diagonalisation of the LVC potential failed'
-       call error_control
+  end function lvcpot
+
+!######################################################################
+
+  subroutine wrgnuplot
+
+    use constants
+    use iomod
+    use global
+    use pltmod
+
+    implicit none
+
+    integer           :: unit,s
+    character(len=2)  :: am,as
+    character(len=80) :: filename,datfile,string
+
+!----------------------------------------------------------------------
+! Filenames
+!----------------------------------------------------------------------
+    write(am,'(i2)') mplt
+
+    ! data file
+    datfile='plot_q'//trim(adjustl(am))//'.dat'
+
+    ! gnuplot file
+    filename='plot_q'//trim(adjustl(am))//'.gnu'
+
+!----------------------------------------------------------------------
+! Energy ranges and states
+!----------------------------------------------------------------------
+    if (si.eq.-1) si=1
+    if (sf.eq.-1) sf=nsta
+    if (ei.eq.-999.0d0) ei=0.98d0*minval(surf(:,si:sf))
+    if (ef.eq.-999.0d0) ef=1.02d0*maxval(surf(:,si:sf))
+
+!----------------------------------------------------------------------
+! Open the gnuplot file
+!----------------------------------------------------------------------
+    call freeunit(unit)
+    open(unit,file=filename,form='formatted',status='unknown')
+
+!----------------------------------------------------------------------
+! Write the gnuplot file
+!----------------------------------------------------------------------
+    ! Set up
+    write(unit,'(a)') 'set size square'
+    write(unit,'(a)') 'unset key'
+    write(unit,'(a)') 'monitorSize=system("xrandr | awk &
+         ''/\*/{sub(/x/,\",\");print $1;exit}''")'
+    write(unit,'(a,/)') 'set terminal x11 size @monitorSize'
+
+    ! Axis labels
+    write(unit,'(a)') 'set ylabel ''Energy (eV)'''
+    write(am,'(i2)') mplt
+    string='set xlabel ''Q_'//trim(adjustl(am))//''''
+    write(unit,'(a,/)') trim(string)
+
+    ! Ranges
+    write(unit,'(2(a,F6.2),a)') 'set xrange [',qi,':',qf,']'
+    write(unit,'(2(a,F6.2),a,/)') 'set yrange [',ei,':',ef,']'
+
+    ! State si
+    string='plot '''//trim(datfile)//''' u 1:'
+    write(as,'(i2)') si+1
+    string=trim(string)//trim(adjustl(as))//' w l lw 4'
+    write(unit,'(a)') trim(string)
+
+    ! States si+1 to sf
+    do s=si+1,sf
+       string='replot '''//trim(datfile)//''' u 1:'
+       write(as,'(i2)') s+1
+       string=trim(string)//trim(adjustl(as))//' w l lw 4'
+       write(unit,'(a)') trim(string)
+    enddo
+
+    ! eps output
+    if (leps) then
+       write(unit,'(/,a)') 'set terminal postscript eps &
+            enhanced color solid "Helvetica" 20'
+       write(unit,'(a)') 'set output '''&
+            //filename(1:index(filename,'.gnu'))//'eps'''
+       write(unit,'(a)') 'replot'
     endif
+
+    ! pause -1
+    write(unit,'(/,a)') 'pause -1'
+
+!----------------------------------------------------------------------
+! Close the gnuplot file
+!----------------------------------------------------------------------
+    close(unit)
+
+!----------------------------------------------------------------------
+! Plot the surfaces to the screen
+!----------------------------------------------------------------------
+    call system('gnuplot '//trim(filename))
 
     return
 
-  end function adiabpot
+  end subroutine wrgnuplot
 
 !######################################################################
 
