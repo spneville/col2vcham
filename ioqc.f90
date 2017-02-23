@@ -222,7 +222,7 @@ contains
           ! Fill in the lower triangle
           nact(:,s2,s1)=nact(:,s1,s2)
 
-          ! Close the gradient file
+          ! Close the NACT file
           close(unit)
 
        enddo
@@ -231,6 +231,86 @@ contains
     return
 
   end subroutine rdnact
+
+!######################################################################
+
+  subroutine rddip
+
+    use constants
+    use global
+    use iomod
+
+    implicit none
+
+    integer            :: s,s1,s2,i,j,unit
+    character(len=150) :: filename,string
+    character(len=2)   :: asta1,asta2
+
+!----------------------------------------------------------------------
+! Read the on-diagonal elements of the dipole matrix
+!----------------------------------------------------------------------
+    call freeunit(unit)
+
+    ! Loop over states
+    do s=1,nsta
+       
+       ! Open the propls file
+       write(asta1,'(i2)') s
+       filename=trim(coldir)//'/LISTINGS/propls.ci.drt1.state'&
+            //trim(adjustl(asta1))//'.sp'
+       open(unit,file=filename,form='formatted',status='old')
+       
+       ! Read the dipole moment
+5      read(unit,'(a)',end=999) string
+       if (index(string,'Dipole moments:').eq.0) goto 5
+       do i=1,3
+          read(unit,*)
+       enddo
+       read(unit,'(11x,3(2x,F14.8))') (dipole(i,s,s),i=1,3)
+
+       ! Close the propls file
+       close(unit)
+
+    enddo
+
+!----------------------------------------------------------------------
+! Read the off-diagonal elements of the dipole matrix
+!----------------------------------------------------------------------
+    ! Loop unique pairs of states
+    do s1=1,nsta-1
+       do s2=s1+1,nsta
+
+          ! Open the trncils file
+          write(asta1,'(i2)') s1
+          write(asta2,'(i2)') s2
+          filename=trim(coldir)//'/LISTINGS/trncils.drt1.state'&
+            //trim(adjustl(asta1))//'.drt1.state'&
+            //trim(adjustl(asta2))
+          open(unit,file=filename,form='formatted',status='old')
+
+          ! Read the transition diole moment
+10        read(unit,'(a)',end=999) string
+          if (index(string,'Transition moment components:').eq.0) goto 10
+          do i=1,3
+             read(unit,*)
+          enddo
+          read(unit,'(13x,3(F13.6))') (dipole(i,s1,s2),i=1,3)
+          dipole(:,s2,s1)=dipole(:,s1,s2)
+
+          ! Close the trncils file
+          close(unit)
+
+       enddo
+    enddo
+
+    return
+
+999 continue
+    errmsg='No dipole moment matrix element could be found in: '&
+         //trim(filename)
+    call error_control
+
+  end subroutine rddip
 
 !######################################################################
 

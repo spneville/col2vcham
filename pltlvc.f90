@@ -567,7 +567,7 @@ contains
     ! Axis labels
     write(unit,'(a)') 'set ylabel ''Energy (eV)'''
     write(am,'(i2)') mplt
-    string='set xlabel ''Q_'//trim(adjustl(am))//''''
+    string='set xlabel ''Q_{'//trim(adjustl(am))//'}'''
     write(unit,'(a,/)') trim(string)
 
     ! Ranges

@@ -41,6 +41,11 @@ program col2vcham
   call rdnact
 
 !----------------------------------------------------------------------
+! If needed, read the dipole matrix elements
+!----------------------------------------------------------------------
+  if (hml) call rddip
+
+!----------------------------------------------------------------------
 ! Read the frequency file: normal modes and reference geometry
 !----------------------------------------------------------------------
   call rdfreqfile
@@ -55,6 +60,11 @@ program col2vcham
 !----------------------------------------------------------------------
   call transgrad
   call transnact
+
+!----------------------------------------------------------------------
+! If requested, convert the LVC parameters to a.u.
+!----------------------------------------------------------------------
+  if (outau) call par2au
 
 !----------------------------------------------------------------------
 ! Write the output files:
@@ -110,13 +120,26 @@ contains
     implicit none
 
     integer            :: n
-    character(len=120) :: string
+    character(len=120) :: string1,string2
 
 !----------------------------------------------------------------------
 ! Initialisation
 !----------------------------------------------------------------------
+    ! Name of the frequency file
     freqfile=''
+
+    ! Columbus directory
     coldir=''
+
+    ! Flag to control whether or not the LVC parameter values are to
+    ! be output in a.u.
+    outau=.false.
+
+    ! H_ML (Interaction with an external field)
+    hml=.false.
+    omega=-999.0d0
+    t0=-999.0d0
+    sigma=-999.0d0
 
 !----------------------------------------------------------------------
 ! Read the command line arguments
@@ -125,16 +148,29 @@ contains
 5   continue
     
     n=n+1
-    call getarg(n,string)
+    call getarg(n,string1)
        
-    if (string.eq.'-d') then
+    if (string1.eq.'-d') then
        n=n+1
        call getarg(n,coldir)
-    else if (string.eq.'-f') then
+    else if (string1.eq.'-f') then
        n=n+1
        call getarg(n,freqfile)
+    else if (string1.eq.'-au') then
+       outau=.true.
+    else if (string1.eq.'-hml') then
+       hml=.true.
+       n=n+1
+       call getarg(n,string2)
+       read(string2,*) omega
+       n=n+1
+       call getarg(n,string2)
+       read(string2,*) t0
+       n=n+1
+       call getarg(n,string2)
+       read(string2,*) sigma
     else
-       write(6,'(/,2(2x,a),/)') 'Unknown keyword:',trim(string)
+       write(6,'(/,2(2x,a),/)') 'Unknown keyword:',trim(string1)
        stop
     endif
 
@@ -220,6 +256,10 @@ contains
     nmcoo=0.0d0
     coonm=0.0d0
 
+    ! Dipole matrix
+    allocate(dipole(3,nsta,nsta))
+    dipole=0.0d0
+
     return
 
   end subroutine alloc
@@ -298,6 +338,26 @@ contains
 
 !######################################################################
 
+  subroutine par2au
+
+    use global
+
+    implicit none
+
+!----------------------------------------------------------------------
+! Convert the LVC parameter values from eV to a.u.
+!----------------------------------------------------------------------
+    freq=freq/eh2ev
+    ener=ener/eh2ev
+    kappa=kappa/eh2ev
+    lambda=lambda/eh2ev
+
+    return
+
+  end subroutine par2au
+
+!######################################################################
+
   subroutine wrguess
     
     use constants
@@ -360,12 +420,24 @@ contains
 
     implicit none
 
-    integer            :: unit,m,s,s1,s2,i,j,k,nl,ncurr,fel
-    real(d), parameter :: thrsh=1e-5
-    character(len=2)   :: am,as,as1,as2,afel
-    character(len=90)  :: string
-    character(len=3)   :: amode
-    character(len=8)   :: atmp
+    integer                        :: unit,m,s,s1,s2,i,j,k,c,nl,&
+                                      ncurr,fel
+    real(d), parameter             :: thrsh=1e-5
+    character(len=2)               :: am,as,as1,as2,afel,aft
+    character(len=5)               :: aunit
+    character(len=90)              :: string
+    character(len=3)               :: amode
+    character(len=8)               :: atmp
+    character(len=1), dimension(3) :: acomp
+
+!----------------------------------------------------------------------
+! Get the unit label
+!----------------------------------------------------------------------
+    if (outau) then
+       aunit='     '
+    else
+       aunit=' , ev'
+    endif
 
 !----------------------------------------------------------------------
 ! Open the MCTDH operator file
@@ -379,6 +451,16 @@ contains
     fel=nmodes+1
     write(afel,'(i2)') fel
 
+!----------------------------------------------------------------------
+! Index of the Time DOF
+!----------------------------------------------------------------------
+    write(aft,'(i2)') fel+1
+
+!----------------------------------------------------------------------
+! Cartesian axis labels
+!----------------------------------------------------------------------
+    acomp=(/ 'x' , 'y' , 'z' /)
+    
 !----------------------------------------------------------------------
 ! Write the op_define section
 !----------------------------------------------------------------------
@@ -398,16 +480,16 @@ contains
     write(unit,'(/,a)') '# Frequencies'
     do m=1,nmodes
        write(am,'(i2)') m
-       write(unit,'(a,F8.5,a)') &
-            'omega_'//adjustl(am)//' =',freq(m),' , ev'
+       write(unit,'(a,F9.6,a)') &
+            'omega_'//adjustl(am)//' =',freq(m),aunit
     enddo
 
     ! Energies
     write(unit,'(/,a)') '# Energies'
     do s=1,nsta
        write(as,'(i2)') s
-       write(unit,'(a,F8.5,a)') &
-            'E'//adjustl(as)//' = ',ener(s),' , ev'
+       write(unit,'(a,F9.6,a)') &
+            'E'//adjustl(as)//' = ',ener(s),aunit
     enddo
     
     ! 1st-order intrastate coupling constants (kappa)
@@ -418,8 +500,8 @@ contains
        do m=1,nmodes
           if (abs(kappa(m,s)).lt.thrsh) cycle
           write(am,'(i2)') m
-          write(unit,'(a,F8.5,a)') 'kappa'//trim(adjustl(as))&
-               //'_'//adjustl(am)//' = ',kappa(m,s),' , ev'
+          write(unit,'(a,F9.6,a)') 'kappa'//trim(adjustl(as))&
+               //'_'//adjustl(am)//' = ',kappa(m,s),aunit
        enddo
     enddo
 
@@ -433,15 +515,63 @@ contains
           do m=1,nmodes
              if (abs(lambda(m,s1,s2)).lt.thrsh) cycle
              write(am,'(i2)') m
-             write(unit,'(a,F8.5,a)') 'lambda'//trim(adjustl(as1))&
+             write(unit,'(a,F9.6,a)') 'lambda'//trim(adjustl(as1))&
                //'_'//trim(adjustl(as2))//'_'//adjustl(am)//&
-               ' = ',lambda(m,s1,s2),' , ev'
+               ' = ',lambda(m,s1,s2),aunit
           enddo
        enddo
     enddo
 
+    ! Dipole matrix elements
+    if (hml) then
+       write(unit,'(/,a)') '# Dipole matrix elements'
+       do c=1,3
+          do s1=1,nsta
+             write(as1,'(i2)') s1
+             do s2=s1,nsta
+                write(as2,'(i2)') s2
+                if (abs(dipole(c,s1,s2)).lt.thrsh) cycle
+                write(unit,'(a,F9.6)') 'dip'//acomp(c)&
+                     //trim(adjustl(as1))//trim(adjustl(as2))&
+                     //' = ',dipole(c,s1,s2)
+             enddo
+          enddo
+       enddo          
+    endif
+
+    ! Pulse parameters
+    if (hml) then
+       write(unit,'(/,a)') '# Pulse parameters'
+       write(unit,'(a)') 'A = 2.7726'
+       write(unit,'(a)') 'B = A/PI'
+       write(unit,'(a)') 'C = B^0.5'
+       write(unit,'(a)') 's = 1.0'
+       write(unit,'(a,F5.2,a)') 'width = ',sigma,' , fs'
+       write(unit,'(a,F5.2,a)') 'freq = ',omega,aunit
+       write(unit,'(a,F5.2,a)') 't0 = ',t0,' , fs'
+    endif
+
     ! Finishing line
     write(unit,'(/,a)') 'end-parameter-section'
+
+!----------------------------------------------------------------------
+! Write the labels section
+!----------------------------------------------------------------------
+    if (hml) then
+       
+       ! Starting line
+       write(unit,'(/,a)') 'labels-section'
+
+       ! Pulse functions
+       write(unit,'(a)') 'pulse = gauss[A/width^2,t0]'
+       write(unit,'(a)') 'cosom = cos[freq,t0]'
+       write(unit,'(a)') 'stepf = step[-1.25*freq+t0]'
+       write(unit,'(a)') 'stepr = rstep[1.25*freq+t0]'
+
+       ! Finishing line
+       write(unit,'(/,a)') 'end-labels-section'
+    
+    endif
 
 !----------------------------------------------------------------------
 ! Write the Hamiltonian section
@@ -452,9 +582,17 @@ contains
     ! Modes section
     write(unit,'(/,38a)') ('-',i=1,38)
     m=0    
-    nl=ceiling((real(nmodes+1))/10.0d0)
+    if (hml) then
+       nl=ceiling((real(nmodes+2))/10.0d0)
+    else
+       nl=ceiling((real(nmodes+1))/10.0d0)
+    endif
     do i=1,nl
-       ncurr=min(10,nmodes+1-10*(i-1))
+       if (hml) then
+          ncurr=min(10,nmodes+2-10*(i-1))
+       else
+          ncurr=min(10,nmodes+1-10*(i-1))
+       endif
        string='modes|'
        do k=1,ncurr
           m=m+1
@@ -467,7 +605,11 @@ contains
                 string=trim(string)//trim(atmp)//' |'
              endif
           else
-             string=trim(string)//' el'
+             if (m.eq.nmodes+1) then
+                string=trim(string)//' el'
+             else
+                string=trim(string)//'  | Time'
+             endif
           endif
        enddo
        write(unit,'(a)') trim(string)
@@ -533,6 +675,26 @@ contains
        enddo
     enddo
 
+    ! Light-molecule interaction (H_ML)
+    if (hml) then
+       write(unit,'(/,a)') '# Light-molecule interaction (H_ML)'
+       do c=1,3
+          do s1=1,nsta
+             write(as1,'(i2)') s1
+             do s2=s1,nsta
+                write(as2,'(i2)') s2
+                if (abs(dipole(c,s1,s2)).lt.thrsh) cycle
+                write(unit,'(a)') 'dip'//acomp(c)&
+                     //trim(adjustl(as1))//trim(adjustl(as2))&
+                     //'*s*C/width'//'  |'//adjustl(afel)&
+                     //'  S'//trim(adjustl(as1))//'&'&
+                     //trim(adjustl(as2))//'  |'//adjustl(aft)&
+                     //'  cosom*pulse*stepf*stepr'
+             enddo
+          enddo
+       enddo
+    endif
+
     ! Finishing line
     write(unit,'(/,a)') 'end-hamiltonian-section'
 
@@ -582,7 +744,7 @@ contains
        do s=1,nsta
           fwp=kappa(m,s)/freq(m)
           if (abs(fwp).lt.thrsh) cycle
-          write(ilog,'(a5,2(x,i2),x,a2,F8.5)') &
+          write(ilog,'(a5,2(x,i2),x,a2,F9.6)') &
                'kappa',m,s,'= ',fwp
           if (abs(fwp).ge.maxpar(m,s)) maxpar(m,s)=abs(fwp)
        enddo
@@ -598,7 +760,7 @@ contains
           do s2=s1+1,nsta
              fwp=lambda(m,s1,s2)/freq(m)
              if (abs(fwp).lt.thrsh) cycle
-             write(ilog,'(a6,3(x,i2),x,a2,F8.5)') &
+             write(ilog,'(a6,3(x,i2),x,a2,F9.6)') &
                   'lambda',m,s1,s2,'= ',fwp
              if (abs(fwp).ge.maxpar(m,s1)) maxpar(m,s1)=abs(fwp)
           enddo
