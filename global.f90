@@ -30,7 +30,7 @@ module global
   character(len=3), dimension(:), allocatable :: nmlab
 
   ! H_ML (Interaction with an external field)
-  real(d)                                     :: omega,t0,sigma
+  real(d)                                     :: omega,t0,sigma,I0
   logical                                     :: hml
 
 end module global

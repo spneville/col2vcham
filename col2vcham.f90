@@ -137,9 +137,14 @@ contains
 
     ! H_ML (Interaction with an external field)
     hml=.false.
+    ! Central frequency (eV)
     omega=-999.0d0
+    ! Centre of the peak (fs)
     t0=-999.0d0
+    ! FWHM (fs)
     sigma=-999.0d0
+    ! Peak intensity (W/cm^2)
+    I0=-999.0d0
 
 !----------------------------------------------------------------------
 ! Read the command line arguments
@@ -169,6 +174,9 @@ contains
        n=n+1
        call getarg(n,string2)
        read(string2,*) sigma
+       n=n+1
+       call getarg(n,string2)
+       read(string2,*) I0
     else
        write(6,'(/,2(2x,a),/)') 'Unknown keyword:',trim(string1)
        stop
@@ -545,10 +553,11 @@ contains
        write(unit,'(a)') 'A = 2.7726'
        write(unit,'(a)') 'B = A/PI'
        write(unit,'(a)') 'C = B^0.5'
-       write(unit,'(a)') 's = 1.0'
        write(unit,'(a,F5.2,a)') 'width = ',sigma,' , fs'
        write(unit,'(a,F5.2,a)') 'freq = ',omega,aunit
        write(unit,'(a,F5.2,a)') 't0 = ',t0,' , fs'
+       write(unit,'(a,D14.8,a)') 'I0 = ',I0,' , winvcm2'
+       write(unit,'(a)') 's = I0*width/C'
     endif
 
     ! Finishing line
@@ -560,10 +569,10 @@ contains
     if (hml) then
        
        ! Starting line
-       write(unit,'(/,a)') 'labels-section'
+       write(unit,'(/,a)') 'LABELS-SECTION'
 
        ! Pulse functions
-       write(unit,'(a)') 'pulse = gauss[A/width^2,t0]'
+       write(unit,'(/,a)') 'pulse = gauss[A/width^2,t0]'
        write(unit,'(a)') 'cosom = cos[freq,t0]'
        write(unit,'(a)') 'stepf = step[-1.25*freq+t0]'
        write(unit,'(a)') 'stepr = rstep[1.25*freq+t0]'
@@ -684,7 +693,7 @@ contains
              do s2=s1,nsta
                 write(as2,'(i2)') s2
                 if (abs(dipole(c,s1,s2)).lt.thrsh) cycle
-                write(unit,'(a)') 'dip'//acomp(c)&
+                write(unit,'(a)') '-dip'//acomp(c)&
                      //trim(adjustl(as1))//trim(adjustl(as2))&
                      //'*s*C/width'//'  |'//adjustl(afel)&
                      //'  S'//trim(adjustl(as1))//'&'&
