@@ -574,8 +574,8 @@ contains
        ! Pulse functions
        write(unit,'(/,a)') 'pulse = gauss[A/width^2,t0]'
        write(unit,'(a)') 'cosom = cos[freq,t0]'
-       write(unit,'(a)') 'stepf = step[-1.25*freq+t0]'
-       write(unit,'(a)') 'stepr = rstep[1.25*freq+t0]'
+       write(unit,'(a)') 'stepf = step[t0-1.25*width]'
+       write(unit,'(a)') 'stepr = rstep[t0+1.25*width]'
 
        ! Finishing line
        write(unit,'(/,a)') 'end-labels-section'
