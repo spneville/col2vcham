@@ -609,7 +609,7 @@ contains
        write(unit,'(a,F5.2,a)') 'width = ',sigma,' , fs'
        write(unit,'(a,F5.2,a)') 'freq = ',omega,aunit
        write(unit,'(a,F5.2,a)') 't0 = ',t0,' , fs'
-       write(unit,'(a,D14.8,a)') 'I0 = ',I0,' , winvcm2'
+       write(unit,'(a,F20.3,a)') 'I0 = ',I0,' , winvcm2'
        write(unit,'(a)') 's = I0*width/C'
     endif
 
