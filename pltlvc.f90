@@ -120,7 +120,9 @@ contains
     n=n+1
     call getarg(n,string1)
 
-    if (string1.eq.'-m') then
+    if (string1.eq.'-h') then
+       call wrhelp
+    else if (string1.eq.'-m') then
        n=n+1
        call getarg(n,string2)
        read(string2,*) mplt
@@ -177,6 +179,61 @@ contains
 
 !######################################################################
 
+  subroutine wrhelp
+
+    implicit none
+
+    integer :: i
+
+!----------------------------------------------------------------------
+! Write the input options to screen, then quit
+!----------------------------------------------------------------------
+    ! Purpose
+    write(6,'(/,25a)') ('-',i=1,25)
+    write(6,'(a)') 'Purpose'
+    write(6,'(25a)') ('-',i=1,25)
+    write(6,'(a)') 'Plots the model potentials of the LVC &
+         Hamiltonian constructed using the col2vcham program'
+
+    ! Usage
+    write(6,'(/,25a)') ('-',i=1,25)
+    write(6,'(a)') 'Usage'
+    write(6,'(25a)') ('-',i=1,25)
+    write(6,'(a)') 'pltlvc -m (-xrange -yrange -npnts -si -sf -eps &
+         -diab -adiab)'
+
+    ! Options
+    write(6,'(/,25a)') ('-',i=1,25)
+    write(6,'(a)')   'Options'
+    write(6,'(25a)') ('-',i=1,25)
+    write(6,'(a)') '-m M              : &
+         The plot is along the Mth mode'
+    write(6,'(a)') '-xrange QI QF     : &
+         The plot is over the coordinate interval [QI,QF]'
+    write(6,'(a)') '-yrange EI EF     : &
+         The plot is over the energy interval [EI,EF]'
+    write(6,'(a)') '-npnts N          : &
+         The plot will be made using N points for each state'
+    write(6,'(a)') '-si I             : &
+         I is the index of the lowest state potential to be plotted'
+    write(6,'(a)') '-sf F             : &
+         F is the index of the highest state potential to be plotted'
+    write(6,'(a)') '-eps              : &
+         Also write the model potentials to an eps file'
+    write(6,'(a)') '-diab             : &
+         Plot the diabatic potentials (default)'
+    write(6,'(a)') '-adiab            : &
+         Plot the adiabatic potentials'
+    
+    write(6,'(/)')
+    STOP
+    
+    return
+    
+  end subroutine wrhelp
+    
+!######################################################################
+  
   subroutine rddatfile
     
     use constants

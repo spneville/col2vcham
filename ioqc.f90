@@ -263,7 +263,7 @@ contains
        ! Read the dipole moment
 5      read(unit,'(a)',end=999) string
        if (index(string,'Dipole moments:').eq.0) goto 5
-       do i=1,3
+       do i=1,4
           read(unit,*)
        enddo
        read(unit,'(11x,3(2x,F14.8))') (dipole(i,s,s),i=1,3)

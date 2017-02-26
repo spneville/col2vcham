@@ -155,7 +155,9 @@ contains
     n=n+1
     call getarg(n,string1)
        
-    if (string1.eq.'-d') then
+    if (string1.eq.'-h') then
+       call wrhelp
+    else if (string1.eq.'-d') then
        n=n+1
        call getarg(n,coldir)
     else if (string1.eq.'-f') then
@@ -207,6 +209,57 @@ contains
  
   end subroutine rdinput
 
+!######################################################################
+
+  subroutine wrhelp
+
+    implicit none
+
+    integer :: i
+
+!----------------------------------------------------------------------
+! Write the input options to screen, then quit
+!----------------------------------------------------------------------
+    ! Purpose
+    write(6,'(/,25a)') ('-',i=1,25)
+    write(6,'(a)') 'Purpose'
+    write(6,'(25a)') ('-',i=1,25)
+    write(6,'(a)') 'Calculates the parameters of the LVC &
+         Hamiltonian from Columbus MRCI output.'
+
+    ! Usage
+    write(6,'(/,25a)') ('-',i=1,25)
+    write(6,'(a)') 'Usage'
+    write(6,'(25a)') ('-',i=1,25)
+    write(6,'(a)') 'col2vcham -f -d (-hml -au)'
+    
+    ! Options
+    write(6,'(/,25a)') ('-',i=1,25)
+    write(6,'(a)')   'Options'
+    write(6,'(25a)') ('-',i=1,25)
+    write(6,'(a)')     '-f FREQFILE            : &
+         The normal modes and frequencies are read from FREQFILE'
+    write(6,'(a)')     '-d COLDIR              : &
+         The Columbus output files/directories are contained in the &
+         directory COLDIR'
+    write(6,'(a,4(/,25x,a))') '-hml OMEGA T0 SIGMA I0 : &
+         The zeroth-order light-matter interaction Hamiltonian is &
+         to also be calculated',&
+         'The central frequency is OMEGA (eV)',&
+         'The pulse is centred at time T0 (fs)',&
+         'The FWHM of the pulse is SIGMA (fs)',&
+         'The peak intensity of the pulse is I0 (W/cm^2)'
+    write(6,'(a)')     '-au                    : &
+         The MCTDH operator file is the be written in atomic units'
+    
+    write(6,'(/)')
+
+    STOP
+    
+    return
+    
+  end subroutine wrhelp
+    
 !######################################################################
 
   subroutine alloc
