@@ -1047,7 +1047,7 @@ contains
     enddo
 
     do i=1,ncoo
-       nmcoo(i,:)=nmcoo(i,:)*sqrt(mass(j))
+       nmcoo(i,:)=nmcoo(i,:)*sqrt(mass(i))
     enddo
 
     return
