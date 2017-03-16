@@ -348,6 +348,7 @@ contains
 !          
 !          ityp = 1 <-> G98
 !                 2 <-> CFOUR
+!                 3 <-> Hessian file
 !######################################################################
   subroutine freqtype
 
@@ -376,6 +377,9 @@ contains
     else if (iscfour(freqfile)) then
        ! CFOUR
        ityp=2
+    else if (ishessian(freqfile)) then
+       ! Hessian
+       ityp=3
     endif
 
 !----------------------------------------------------------------------
@@ -478,6 +482,57 @@ contains
   end function iscfour
 
 !######################################################################
+  
+  function ishessian(filename) result(found)
+
+    use constants
+    use iomod
+
+    implicit none
+
+    integer            :: unit
+    character(len=*)   :: filename
+    character(len=120) :: string
+    logical            :: found,dir
+
+!----------------------------------------------------------------------
+! First determine whether freqfile is actually a file.
+! This is necessary as for certain programs, the name of a directory
+! will actually be passed instead
+!----------------------------------------------------------------------
+    inquire(file=trim(filename)//'/.',exist=dir)
+
+    if (dir) then
+       found=.false.
+       return
+    endif
+
+!----------------------------------------------------------------------
+! Open the frequency file
+!----------------------------------------------------------------------
+    call freeunit(unit)
+    open(unit,file=filename,form='formatted',status='old')
+
+!----------------------------------------------------------------------
+! Check whether the file is a Hessian file
+!----------------------------------------------------------------------
+    read(unit,'(a)') string
+    if (index(string,'Hessian').ne.0) then
+       found=.true.
+    else
+       found=.false.
+    endif
+
+!----------------------------------------------------------------------
+! Close the frequency file
+!----------------------------------------------------------------------
+    close(unit)
+
+    return
+
+  end function ishessian
+
+!######################################################################
 
   subroutine getxcoo
 
@@ -502,6 +557,9 @@ contains
     else if (ityp.eq.2) then
        ! CFOUR
        call getxcoo_cfour
+    else if (ityp.eq.3) then
+       ! Hessian
+       call getxcoo_hessian
     endif
 
     return
@@ -634,6 +692,45 @@ contains
 
 !######################################################################
 
+  subroutine getxcoo_hessian
+
+    use constants
+    use iomod
+    use global
+
+    implicit none
+
+    integer          :: unit,i,j
+
+!----------------------------------------------------------------------
+! Open the frequency file
+!----------------------------------------------------------------------
+    call freeunit(unit)
+    open(unit,file=freqfile,form='formatted',status='old')
+
+!----------------------------------------------------------------------
+! Read the Cartesian coordinates
+!----------------------------------------------------------------------
+    read(unit,*)
+    do i=1,natm
+       read(unit,*) atlbl(i),(xcoo0(j), j=i*3-2,i*3)
+       mass(i*3-2:i*3)=lbl2mass(atlbl(i))
+    enddo
+
+    ! Convert to Bohr
+    xcoo0=xcoo0*ang2bohr
+    
+!----------------------------------------------------------------------
+! Close the frequency file
+!----------------------------------------------------------------------
+    close(unit)
+
+    return
+
+  end subroutine getxcoo_hessian
+
+!######################################################################
+
   function num2lbl(num) result(lbl)
 
     use constants
@@ -687,6 +784,33 @@ contains
   end function num2mass
 
 !######################################################################
+  
+  function lbl2mass(lbl) result(mass)
+
+    use constants
+    use iomod
+
+    implicit none
+
+    real(d)          :: mass
+    character(len=*) :: lbl
+
+    if (lbl.eq.'H') then
+       mass=1.00794d0
+    else if (lbl.eq.'C') then
+       mass=12.0107d0
+    else if (lbl.eq.'N') then
+       mass=14.0067d0
+    else
+       errmsg='The atom type '//trim(lbl)//' is not supported.'&
+            //' See function lbl2mass'
+    endif
+
+    return
+
+  end function lbl2mass
+
+!######################################################################
 
   subroutine getmodes
 
@@ -705,6 +829,9 @@ contains
     else if (ityp.eq.2) then
        ! CFOUR
        call getmodes_cfour
+    else if (ityp.eq.3) then
+       ! HESSIAN
+       call getmodes_hessian
     endif
 
 !----------------------------------------------------------------------
@@ -974,6 +1101,51 @@ contains
     call error_control
 
   end subroutine getmodes_cfour
+
+!######################################################################
+
+  subroutine getmodes_hessian
+
+    use constants
+    use iomod
+    use global
+
+    implicit none
+    
+    integer                       :: unit,i,j
+    real(d), dimension(ncoo,ncoo) :: hess
+
+!----------------------------------------------------------------------
+! Read the Hessian
+!----------------------------------------------------------------------
+    ! Open the Hessian file
+    call freeunit(unit)
+    open(unit,file=freqfile,form='formatted',status='old')
+
+    ! Read the Hessian
+    do i=1,natm+1
+       read(unit,*)
+    enddo
+    do i=1,ncoo
+       read(unit,*) (hess(i,j),j=1,ncoo)
+    enddo
+
+    ! Close the Hessian file
+    close(unit)
+
+!----------------------------------------------------------------------
+! Calculate the normal mode vectors from the Hessian
+!----------------------------------------------------------------------
+    call hess2nm(hess)
+
+!----------------------------------------------------------------------
+! Assign the symmetry labels: only C1 symmetry is supported for now
+!----------------------------------------------------------------------
+    nmlab(1:nmodes)='A'
+    
+    return
+
+  end subroutine getmodes_hessian
 
 !######################################################################
 
