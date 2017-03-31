@@ -10,10 +10,11 @@ The code is command line driven and only requires two keyword pairs:
 -f freqfile, where freqfile is the name of a quantum chemistry output
              file containing the normal modes and frequencies
 
--d coldir,   where coldir is the path to the directory containing the
-             Columbus output
+-d qcfile,   where qcfile is the path to the file or directory
+             containing the output of the coupling coefficient
+	     calculation
 
-(i.e., col2vcham -f freqfile -d coldir)
+(i.e., col2vcham -f freqfile -d qcfile)
 
 # Output
 guess.dat - a file containing the 1st-order parameters of the LVC

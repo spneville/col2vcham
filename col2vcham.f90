@@ -24,6 +24,13 @@ program col2vcham
   call rdinput
 
 !----------------------------------------------------------------------
+! Determine the type of quantum chemisty calculations used for the
+! frequency and excited state calculations
+!----------------------------------------------------------------------
+  call freqtype
+  call qctype
+
+!----------------------------------------------------------------------
 ! Determine the system dimensions
 !----------------------------------------------------------------------
   call getdim
@@ -37,8 +44,8 @@ program col2vcham
 ! Read the energies, Cartesian gradients and NACTs
 !----------------------------------------------------------------------
   call rdener
-  call rdgrad
-  call rdnact
+  if (lgrad) call rdgrad
+  if (lnact) call rdnact
 
 !----------------------------------------------------------------------
 ! If needed, read the dipole matrix elements
@@ -104,6 +111,14 @@ contains
     call freeunit(ilog)
     open(ilog,file='col2vcham.log',form='formatted',status='unknown')
 
+!----------------------------------------------------------------------
+! Logical flags controling what is to be read from the excited state
+! calculation output
+!----------------------------------------------------------------------
+    lgrad=.false.
+    lnact=.false.
+
+
     return
 
   end subroutine initialise
@@ -119,7 +134,7 @@ contains
 
     implicit none
 
-    integer            :: n
+    integer            :: n,k
     character(len=120) :: string1,string2
 
 !----------------------------------------------------------------------
@@ -128,8 +143,8 @@ contains
     ! Name of the frequency file
     freqfile=''
 
-    ! Columbus directory
-    coldir=''
+    ! Quantum chemistry file or diractory name
+    qcfile=''
 
     ! Flag to control whether or not the LVC parameter values are to
     ! be output in a.u.
@@ -159,7 +174,16 @@ contains
        call wrhelp
     else if (string1.eq.'-d') then
        n=n+1
-       call getarg(n,coldir)
+       call getarg(n,qcfile(1))
+       k=1
+10     continue
+       call getarg(n+1,string2)
+       if (string2(1:1).ne.'-'.and.n.ne.iargc()) then
+          n=n+1
+          k=k+1
+          qcfile(k)=string2
+          goto 10
+       endif
     else if (string1.eq.'-f') then
        n=n+1
        call getarg(n,freqfile)
@@ -180,8 +204,8 @@ contains
        call getarg(n,string2)
        read(string2,*) I0
     else
-       write(6,'(/,2(2x,a),/)') 'Unknown keyword:',trim(string1)
-       stop
+       errmsg='Unknown keyword: '//trim(string1)
+       call error_control
     endif
 
     if (n.lt.iargc()) goto 5
@@ -194,8 +218,9 @@ contains
        call error_control
     endif
 
-    if (coldir.eq.'') then
-       errmsg="The Columbus directory has not been given"
+    if (qcfile(1).eq.'') then
+       errmsg="The quantum chemisty filename/directory has not &
+            been given"
        call error_control
     endif
 
@@ -203,7 +228,8 @@ contains
 ! Output some information to the log file
 !----------------------------------------------------------------------
     write(ilog,'(/,2(2x,a))') "Frequency file:",trim(freqfile)
-    write(ilog,'(/,2(2x,a))') "Columbus directory:",trim(coldir)
+    write(ilog,'(/,2(2x,a))') "Quantum chemistry filename/directoty:",&
+         trim(qcfile(1))
 
     return
  
@@ -239,9 +265,9 @@ contains
     write(6,'(25a)') ('-',i=1,25)
     write(6,'(a)')     '-f FREQFILE            : &
          The normal modes and frequencies are read from FREQFILE'
-    write(6,'(a)')     '-d COLDIR              : &
-         The Columbus output files/directories are contained in the &
-         directory COLDIR'
+    write(6,'(a)')     '-d QCFILE              : &
+         The quantum chemisty output is contained in the &
+         file or directory QCFILE'
     write(6,'(a,4(/,25x,a))') '-hml OMEGA T0 SIGMA I0 : &
          The zeroth-order light-matter interaction Hamiltonian is &
          to also be calculated',&
@@ -836,10 +862,10 @@ contains
     write(ilog,'(/,a)') '# Estimation of the relative spectroscopic &
          importance'
     write(ilog,'(a)') '# of the normal modes'
-    write(ilog,'(57a)') ('-', i=1,50)
+    write(ilog,'(57a)') ('-', i=1,57)
     write(ilog,'(2x,3(a,5x))') 'State','Mode',&
          'Max. freq.-weighted parameter value'
-    write(ilog,'(57a)') ('-', i=1,50)
+    write(ilog,'(57a)') ('-', i=1,57)
     do s=1,nsta
        call dsortindxa1('D',nmodes,maxpar(:,s),indx)
        do m=1,nmodes

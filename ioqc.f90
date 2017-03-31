@@ -13,6 +13,26 @@ contains
 
   subroutine getdim
 
+    use global
+    
+    implicit none
+
+    if (qctyp.eq.1) then
+       ! Columbus
+       call getdim_columbus
+    else if (qctyp.eq.2) then
+       ! Turbomole, ricc2
+       call getdim_ricc2
+    endif
+    
+    return
+    
+  end subroutine getdim
+
+!######################################################################
+
+  subroutine getdim_columbus
+
     use constants
     use channels
     use iomod
@@ -28,7 +48,7 @@ contains
 !----------------------------------------------------------------------
     ! Open file
     call freeunit(unit)
-    filename=trim(coldir)//'/LISTINGS/ciudgsm.drt1.sp'
+    filename=trim(qcfile(1))//'/LISTINGS/ciudgsm.drt1.sp'
     open(unit,file=filename,form='formatted',status='old')
 
     ! Read to the MRCI energy section
@@ -57,7 +77,7 @@ contains
 !----------------------------------------------------------------------
     ! Open file
     call freeunit(unit)
-    filename=trim(coldir)//'/geom'
+    filename=trim(qcfile(1))//'/geom'
     open(unit,file=filename,form='formatted',status='old')
 
     ! Determine the no. atoms
@@ -89,11 +109,100 @@ contains
     errmsg='It looks like the MRCI calculation did not complete...'
     call error_control
 
-  end subroutine getdim
+  end subroutine getdim_columbus
+
+!######################################################################
+
+  subroutine getdim_ricc2
+    
+    use constants
+    use channels
+    use iomod
+    use global
+
+    implicit none
+
+    integer            :: unit,i
+    character(len=150) :: string
+
+!----------------------------------------------------------------------
+! Open one of the ricc2 output files
+!----------------------------------------------------------------------
+    call freeunit(unit)
+    open(unit,file=qcfile(1),form='formatted',status='old')
+
+!----------------------------------------------------------------------
+! Determine the no. atoms
+!----------------------------------------------------------------------
+5   read(unit,'(a)',end=888) string
+    if (index(string,'atomic coordinates').eq.0) goto 5
+
+    natm=0
+10  read(unit,'(a)') string
+    if (string.ne.'') then
+       natm=natm+1
+       goto 10
+    endif
+
+!----------------------------------------------------------------------
+! Determine the no. states (including the ground state)
+!----------------------------------------------------------------------
+15  read(unit,'(a)',end=999) string
+    if (index(string,'||').eq.0) goto 15
+    do i=1,3
+       read(unit,*)
+    enddo
+
+    nsta=1
+20  read(unit,'(a)') string
+    if (index(string,'+===').eq.0) then
+       nsta=nsta+1
+       goto 20
+    endif
+    
+!----------------------------------------------------------------------
+! Close the ricc2 output file
+!----------------------------------------------------------------------
+    close(unit)
+
+    return
+
+888 continue
+    errmsg='The geometry section could not be found in '//trim(qcfile(1))
+    call error_control
+
+999 continue
+    errmsg='The excitation energy section could not be found in '&
+         //trim(qcfile(1))
+    call error_control
+    
+
+  end subroutine getdim_ricc2
 
 !######################################################################
 
   subroutine rdener
+
+    use global
+
+    implicit none
+
+    integer            :: unit,n
+    character(len=150) :: filename,string
+
+    if (qctyp.eq.1) then
+       ! Columbus
+       call rdener_columbus
+    else if (qctyp.eq.2) then
+       ! Turbomole, ricc2
+       call rdener_ricc2
+    endif
+
+  end subroutine rdener
+
+!######################################################################
+
+  subroutine rdener_columbus
 
     use constants
     use iomod
@@ -103,13 +212,13 @@ contains
 
     integer            :: unit,n
     character(len=150) :: filename,string
-
+    
 !----------------------------------------------------------------------
 ! Read the Davidson corrected MRCI energies from ciudgsm.drt1.sp
 !----------------------------------------------------------------------
     ! Open file
     call freeunit(unit)
-    filename=trim(coldir)//'/LISTINGS/ciudgsm.drt1.sp'
+    filename=trim(qcfile(1))//'/LISTINGS/ciudgsm.drt1.sp'
     open(unit,file=filename,form='formatted',status='old')
 
     ! Read the Davdson-corrected MRCI energies
@@ -138,11 +247,46 @@ contains
     errmsg='Not all MRCI energies could be found... Quitting!'
     call error_control
 
-  end subroutine rdener
-    
+  end subroutine rdener_columbus
+
+!######################################################################
+
+  subroutine rdener_ricc2
+
+    use constants
+    use iomod
+    use global
+
+    implicit none
+
+    integer            :: unit,n
+    character(len=150) :: filename,string
+
+    print*,"WRITE THE RDENER_RICC2 SUBROUTINE!"
+    STOP
+
+    return
+
+  end subroutine rdener_ricc2
+
 !######################################################################
 
   subroutine rdgrad
+
+    use global
+    
+    if (qctyp.eq.1) then
+       ! Columbus
+       call rdgrad_columbus
+    endif
+
+    return
+
+  end subroutine rdgrad
+
+!######################################################################
+
+  subroutine rdgrad_columbus
 
     use constants
     use global
@@ -164,7 +308,7 @@ contains
 
        ! Open the gradient file
        write(asta,'(i2)') i
-       filename=trim(coldir)//'/GRADIENTS/cartgrd.drt1.state'&
+       filename=trim(qcfile(1))//'/GRADIENTS/cartgrd.drt1.state'&
             //trim(adjustl(asta))//'.sp'
        open(unit,file=filename,form='formatted',status='old')
 
@@ -180,11 +324,28 @@ contains
 
     return
 
-  end subroutine rdgrad
+  end subroutine rdgrad_columbus
 
 !######################################################################
 
   subroutine rdnact
+
+    use global
+
+    implicit none
+
+    if (qctyp.eq.1) then
+       ! Columbus
+       call rdnact_columbus
+    endif
+
+    return
+
+  end subroutine rdnact
+
+!######################################################################
+
+  subroutine rdnact_columbus
 
     use constants
     use global
@@ -209,7 +370,7 @@ contains
           ! Open the NACT file
           write(asta1,'(i2)') s1
           write(asta2,'(i2)') s2
-          filename=trim(coldir)//'/GRADIENTS/cartgrd.nad.drt1.state'&
+          filename=trim(qcfile(1))//'/GRADIENTS/cartgrd.nad.drt1.state'&
             //trim(adjustl(asta1))//'.drt1.state'&
             //trim(adjustl(asta2))//'.sp'
           open(unit,file=filename,form='formatted',status='old')
@@ -230,11 +391,28 @@ contains
 
     return
 
-  end subroutine rdnact
+  end subroutine rdnact_columbus
 
 !######################################################################
 
   subroutine rddip
+    
+    use global
+
+    implicit none
+
+    if (qctyp.eq.1) then
+       ! Columbus
+       call rddip_columbus
+    endif
+
+    return
+
+  end subroutine rddip
+
+!######################################################################
+
+  subroutine rddip_columbus
 
     use constants
     use global
@@ -256,7 +434,7 @@ contains
        
        ! Open the propls file
        write(asta1,'(i2)') s
-       filename=trim(coldir)//'/LISTINGS/propls.ci.drt1.state'&
+       filename=trim(qcfile(1))//'/LISTINGS/propls.ci.drt1.state'&
             //trim(adjustl(asta1))//'.sp'
        open(unit,file=filename,form='formatted',status='old')
        
@@ -283,7 +461,7 @@ contains
           ! Open the trncils file
           write(asta1,'(i2)') s1
           write(asta2,'(i2)') s2
-          filename=trim(coldir)//'/LISTINGS/trncils.drt1.state'&
+          filename=trim(qcfile(1))//'/LISTINGS/trncils.drt1.state'&
             //trim(adjustl(asta1))//'.drt1.state'&
             //trim(adjustl(asta2))
           open(unit,file=filename,form='formatted',status='old')
@@ -310,7 +488,7 @@ contains
          //trim(filename)
     call error_control
 
-  end subroutine rddip
+  end subroutine rddip_columbus
 
 !######################################################################
 
@@ -321,12 +499,6 @@ contains
     use iomod
 
     implicit none
-
-!----------------------------------------------------------------------
-! Determine the quantum chemistry program used for the frequency
-! calculation
-!----------------------------------------------------------------------
-    call freqtype
 
 !----------------------------------------------------------------------
 ! Read the reference Cartesian coordinates
@@ -344,11 +516,11 @@ contains
 
 !######################################################################
 ! freqtyp: determines the quantum chemistry program used for the
-!          frequency calculation, and sets ityp accordingly:
+!          frequency calculation, and sets freqtyp accordingly:
 !          
-!          ityp = 1 <-> G98
-!                 2 <-> CFOUR
-!                 3 <-> Hessian file
+!          freqtyp = 1 <-> G98
+!                    2 <-> CFOUR
+!                    3 <-> Hessian file
 !######################################################################
   subroutine freqtype
 
@@ -365,7 +537,7 @@ contains
 !----------------------------------------------------------------------
 ! Initialisation
 !----------------------------------------------------------------------
-    ityp=-1
+    freqtyp=-1
 
 !----------------------------------------------------------------------
 ! Determine the quantum chemistry program used for the frequency
@@ -373,19 +545,19 @@ contains
 !----------------------------------------------------------------------
     if (isg98(freqfile)) then
        ! G98
-       ityp=1
+       freqtyp=1
     else if (iscfour(freqfile)) then
        ! CFOUR
-       ityp=2
+       freqtyp=2
     else if (ishessian(freqfile)) then
        ! Hessian
-       ityp=3
+       freqtyp=3
     endif
 
 !----------------------------------------------------------------------
 ! Check that the quantum chemistry program used is supported
 !----------------------------------------------------------------------
-    if (ityp.eq.-1) then
+    if (freqtyp.eq.-1) then
        errmsg='The quantum chemistry program used for the &
             frequency calculation is not supported.'
        call error_control
@@ -394,6 +566,155 @@ contains
     return
 
   end subroutine freqtype
+
+!######################################################################
+! qctype: determines the quantum chemistry program used for the
+!         coupling coefficient calculations
+!
+!         qctyp = 1 <-> Columbus
+!                 2 <-> Turbomole, ricc2
+!######################################################################
+  subroutine qctype
+
+    use constants
+    use global
+    use iomod
+
+    implicit none
+
+!----------------------------------------------------------------------
+! Initialisation
+!----------------------------------------------------------------------
+    qctyp=-1
+
+!----------------------------------------------------------------------
+! Determine the quantum chemistry program used for the coupling
+! coefficient calculation
+!----------------------------------------------------------------------
+    if (iscolumbus(qcfile(1))) then
+       ! Columbus
+       qctyp=1
+    else if (isricc2(qcfile(1))) then
+       ! Turbomole, ricc2
+       qctyp=2
+    endif
+
+!----------------------------------------------------------------------
+! Check that the quantum chemistry program used is supported
+!----------------------------------------------------------------------
+    if (qctyp.eq.-1) then
+       errmsg='The quantum chemistry program used for the &
+            coupling coefficient calculation is not supported.'
+       call error_control
+    endif
+
+!----------------------------------------------------------------------
+! Set the logical flags controling what is to be read from the
+! quantum chemistry output
+!----------------------------------------------------------------------
+    if (qctyp.eq.1) then
+       ! Columbus: gradients and NACTs
+       lgrad=.true.
+       lnact=.true.
+    else if (qctyp.eq.2) then
+       ! Turbomole, ricc2: gradients only
+       lgrad=.true.
+    endif
+
+    return
+
+  end subroutine qctype
+
+!######################################################################
+
+  function iscolumbus(filename) result(found)
+
+    use constants
+    use iomod
+
+    implicit none
+
+    integer            :: unit
+    character(len=*)   :: filename
+    character(len=120) :: string
+    logical            :: found,dir
+
+!----------------------------------------------------------------------
+! First determine whether the 'file' is actually a file.
+! This is necessary as for certain programs, the name of a directory
+! will actually be passed instead
+!----------------------------------------------------------------------
+    inquire(file=trim(filename)//'/.',exist=dir)
+
+    if (.not.dir) then
+       found=.false.
+       return
+    endif
+
+!----------------------------------------------------------------------
+! Check to see if the LISTINGS subdirectory exists
+!----------------------------------------------------------------------
+    inquire(file=trim(filename)//'/LISTINGS/.',exist=found)
+
+    return
+
+  end function iscolumbus
+
+!######################################################################
+
+  function isricc2(filename) result(found)
+
+    use constants
+    use iomod
+
+    implicit none
+
+    integer            :: unit
+    character(len=*)   :: filename
+    character(len=120) :: string
+    logical            :: found,dir
+
+!----------------------------------------------------------------------
+! First determine whether the 'file' is actually a file.
+! This is necessary as for certain programs, the name of a directory
+! will actually be passed instead
+!----------------------------------------------------------------------
+    inquire(file=trim(filename)//'/.',exist=dir)
+
+    if (dir) then
+       found=.false.
+       return
+    endif
+
+!----------------------------------------------------------------------
+! Open the output file
+!----------------------------------------------------------------------
+    call freeunit(unit)
+    open(unit,file=filename,form='formatted',status='old')
+
+!----------------------------------------------------------------------
+! Check whether the calculation was performed using the Turbomole
+! ricc2 code
+!----------------------------------------------------------------------
+10  read(unit,'(a)',end=999) string
+    if (index(string,' R I C C 2 - PROGRAM').ne.0) then
+       found=.true.
+    else
+       goto 10
+    endif
+
+!----------------------------------------------------------------------    
+! Close the output file
+!----------------------------------------------------------------------
+    close(unit)
+
+    return
+
+999 continue
+    found=.false.
+    return
+
+  end function isricc2
 
 !######################################################################
 
@@ -551,13 +872,13 @@ contains
 !----------------------------------------------------------------------
 ! Read in the reference Cartesian coordinates
 !----------------------------------------------------------------------
-    if (ityp.eq.1) then
+    if (freqtyp.eq.1) then
        ! G98
        call getxcoo_g98
-    else if (ityp.eq.2) then
+    else if (freqtyp.eq.2) then
        ! CFOUR
        call getxcoo_cfour
-    else if (ityp.eq.3) then
+    else if (freqtyp.eq.3) then
        ! Hessian
        call getxcoo_hessian
     endif
@@ -823,13 +1144,13 @@ contains
 !----------------------------------------------------------------------
 ! Read the normal modes from file
 !----------------------------------------------------------------------
-    if (ityp.eq.1) then
+    if (freqtyp.eq.1) then
        ! G98
        call getmodes_g98
-    else if (ityp.eq.2) then
+    else if (freqtyp.eq.2) then
        ! CFOUR
        call getmodes_cfour
-    else if (ityp.eq.3) then
+    else if (freqtyp.eq.3) then
        ! HESSIAN
        call getmodes_hessian
     endif

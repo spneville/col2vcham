@@ -7,8 +7,9 @@ module global
   save
 
   ! I/O
-  integer                                     :: ityp
-  character(len=120)                          :: freqfile,coldir
+  integer                                     :: freqtyp,qctyp
+  character(len=120)                          :: freqfile
+  character(len=120), dimension(50)           :: qcfile
   logical                                     :: outau
 
   ! System information
@@ -23,6 +24,7 @@ module global
   real(d), dimension(:,:), allocatable        :: grad,kappa
   real(d), dimension(:,:,:), allocatable      :: nact,lambda
   real(d), dimension(:,:,:), allocatable      :: dipole
+  logical                                     :: lgrad,lnact
 
   ! Normal modes
   real(d), dimension(:,:), allocatable        :: nmcoo,coonm
