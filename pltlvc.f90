@@ -193,7 +193,7 @@ contains
     write(6,'(a)') 'Purpose'
     write(6,'(25a)') ('-',i=1,25)
     write(6,'(a)') 'Plots the model potentials of the LVC &
-         Hamiltonian constructed using the col2vcham program'
+         Hamiltonian constructed using the qc2vcham program'
 
     ! Usage
     write(6,'(/,25a)') ('-',i=1,25)

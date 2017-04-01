@@ -1,11 +1,11 @@
 !######################################################################
-! col2vcham: a simple program to parse the output of a Columbus
-!            MRCI calculation, extract the parameters of a LVC
-!            Hamiltonian, and output these in a format that can be
-!            used directly with the VCHFIT and MCTDH codes.
+! qc2vcham: a simple program to parse the output of a quantum
+!           chemistry calculation, extract the parameters of a LVC
+!           Hamiltonian, and output these in a format that can be
+!           used directly with the VCHFIT and MCTDH codes.
 !######################################################################
 
-program col2vcham
+program qc2vcham
 
   use constants
   use global
@@ -109,7 +109,7 @@ contains
 ! Open the logfile
 !----------------------------------------------------------------------
     call freeunit(ilog)
-    open(ilog,file='col2vcham.log',form='formatted',status='unknown')
+    open(ilog,file='qc2vcham.log',form='formatted',status='unknown')
 
 !----------------------------------------------------------------------
 ! Logical flags controling what is to be read from the excited state
@@ -251,13 +251,13 @@ contains
     write(6,'(a)') 'Purpose'
     write(6,'(25a)') ('-',i=1,25)
     write(6,'(a)') 'Calculates the parameters of the LVC &
-         Hamiltonian from Columbus MRCI output.'
+         Hamiltonian from quantum chemistry output.'
 
     ! Usage
     write(6,'(/,25a)') ('-',i=1,25)
     write(6,'(a)') 'Usage'
     write(6,'(25a)') ('-',i=1,25)
-    write(6,'(a)') 'col2vcham -f -d (-hml -au)'
+    write(6,'(a)') 'qcvcham -f -d (-hml -au)'
     
     ! Options
     write(6,'(/,25a)') ('-',i=1,25)
@@ -553,7 +553,7 @@ contains
 !----------------------------------------------------------------------
     write(unit,'(a)') 'op_define-section'
     write(unit,'(a)') 'title'
-    write(unit,'(a)') 'MCTDH operator file created by col2vcham'
+    write(unit,'(a)') 'MCTDH operator file created by qc2vcham'
     write(unit,'(a)') 'end-title'
     write(unit,'(a)') 'end-op_define-section'
 
@@ -975,4 +975,4 @@ contains
 
 !######################################################################
 
-end program col2vcham
+end program qc2vcham

@@ -132,11 +132,12 @@ contains
     open(unit,file=qcfile(1),form='formatted',status='old')
 
 !----------------------------------------------------------------------
-! Determine the no. atoms
+! Determine the no. atoms, Cartesian coordinates and normal modes
 !----------------------------------------------------------------------
 5   read(unit,'(a)',end=888) string
     if (index(string,'atomic coordinates').eq.0) goto 5
 
+    ! No. atoms
     natm=0
 10  read(unit,'(a)') string
     if (string.ne.'') then
@@ -144,6 +145,13 @@ contains
        goto 10
     endif
 
+    ! No. Cartesian coordinates
+    ncoo=3*natm
+
+    ! No. normal modes
+    ! N.B. for now we assume that the molecule is not linear...
+    nmodes=ncoo-6
+    
 !----------------------------------------------------------------------
 ! Determine the no. states (including the ground state)
 !----------------------------------------------------------------------
@@ -262,9 +270,38 @@ contains
     integer            :: unit,n
     character(len=150) :: filename,string
 
-    print*,"WRITE THE RDENER_RICC2 SUBROUTINE!"
-    STOP
+!----------------------------------------------------------------------
+! Open one of the ricc2 output files
+!----------------------------------------------------------------------
+    call freeunit(unit)
+    open(unit,file=qcfile(1),form='formatted',status='old')
 
+!----------------------------------------------------------------------
+! Set the ground state excitation energy
+!----------------------------------------------------------------------
+    ener(n)=0.0d0
+    
+!----------------------------------------------------------------------
+! Read to the excitation energy section
+!----------------------------------------------------------------------
+5   read(unit,'(a)') string
+    if (index(string,'||').eq.0) goto 5
+    do n=1,3
+       read(unit,*)
+    enddo
+    
+!----------------------------------------------------------------------
+! Read the excitation energies (in eV)
+!----------------------------------------------------------------------
+    do n=2,nsta
+       read(unit,'(42x,F8.5)') ener(n)
+    enddo
+
+!----------------------------------------------------------------------
+! Close the ricc2 output file
+!----------------------------------------------------------------------
+    close(unit)
+       
     return
 
   end subroutine rdener_ricc2
@@ -278,6 +315,9 @@ contains
     if (qctyp.eq.1) then
        ! Columbus
        call rdgrad_columbus
+    else if (qctyp.eq.2) then
+       ! Turbomole, ricc2
+       call rdgrad_ricc2
     endif
 
     return
@@ -326,6 +366,103 @@ contains
 
   end subroutine rdgrad_columbus
 
+!######################################################################
+
+  subroutine rdgrad_ricc2
+
+    use constants
+    use global
+    use iomod
+
+    implicit none
+
+    integer               :: i,j,k,n,f,nfiles,unit,ista,nblock,indx,&
+                             ires
+    real(d), dimension(5) :: ftmp
+    character(len=120)    :: string
+    character(len=15)     :: fmat
+    
+!----------------------------------------------------------------------
+! The Turbomole ricc2 code can only compute one excited state
+! gradient per calculation. Therefore, we have to read multiple output
+! files - one per excited state
+!----------------------------------------------------------------------
+    ! Determine the no. ricc2 output files
+    nfiles=0
+    do i=1,size(qcfile)
+       if (qcfile(i).ne.'') nfiles=nfiles+1
+    enddo
+       
+    ! Loop over ricc2 output files, reading the gradient vector for
+    ! each
+    call freeunit(unit)
+    do f=1,nfiles
+       
+       ! Open the current ricc2 output file
+       open(unit,file=qcfile(f),form='formatted',status='old')
+       
+       ! Determine the state number for the current file
+5      read(unit,'(a)',end=999) string
+       if (index(string,'number, symmetry, multiplicity').eq.0) goto 5
+       read(string,'(41x,i2)') ista
+       ista=ista+1
+       
+       ! Read the gradient vector
+       do i=1,14
+          read(unit,*)
+       enddo
+       
+       nblock=ceiling(real(natm)/5)
+
+       ! First nblock-1 blocks
+       do i=1,nblock-1
+          read(unit,*)
+          read(unit,*)
+          do j=1,3
+             read(unit,'(7x,5D14.11)') (ftmp(k), k=1,5)
+             do k=1,5
+                ! Atom no.
+                n=(i-1)*5+k
+                ! grad index
+                indx=n*3-3+j
+                ! Fill in the indx'th grad element
+                grad(indx,ista)=ftmp(k)
+             enddo
+          enddo
+       enddo
+       
+       ! Last block
+       read(unit,*)
+       read(unit,*)
+       ires=natm-(nblock-1)*5
+       fmat=''
+       write(fmat,'(a4,i1,a7)') '(7x,',ires,'D14.11)'
+       do j=1,3
+          read(unit,fmat) (ftmp(k), k=1,ires)
+          do k=1,ires
+             ! Atom no.
+             n=(nblock-1)*5+k
+             ! xgrad index
+             indx=n*3-3+j
+             ! Fill in the indx'th grad element
+             grad(indx,ista)=ftmp(k)
+          enddo
+       enddo
+       
+       ! Close the current ricc2 output file
+       close(unit)
+       
+    enddo
+
+   return
+
+999 continue
+    errmsg='The gradient section could not be found in '&
+         //trim(qcfile(i))
+    call error_control
+    
+  end subroutine rdgrad_ricc2
+    
 !######################################################################
 
   subroutine rdnact
@@ -1066,6 +1203,8 @@ contains
        lbl='H'
     else if (num.eq.6) then
        lbl='C'
+    else if (num.eq.7) then
+       lbl='N'
     else
        write(errmsg,'(a,x,i2,x,a)') 'The atomic number',num,&
             'is not supported. See function num2lbl.'

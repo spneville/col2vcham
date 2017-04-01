@@ -21,7 +21,7 @@ OBJ = constants.o \
 	utils.o \
 	parsemod.o \
 	ioqc.o \
-	col2vcham.o
+	qc2vcham.o
 
 OBJ_PLTLVC = constants.o \
 	global.o \
@@ -30,8 +30,8 @@ OBJ_PLTLVC = constants.o \
 	pltmod.o \
 	pltlvc.o
 
-col2vcham: $(OBJ)
-	$(F90) $(F90OPTS) $(OBJ) $(LIBS) -o col2vcham
+qc2vcham: $(OBJ)
+	$(F90) $(F90OPTS) $(OBJ) $(LIBS) -o qc2vcham
 	rm -f *.o *~ *.mod 2>/dev/null
 
 pltlvc: $(OBJ_PLTLVC)
