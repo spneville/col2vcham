@@ -17,10 +17,10 @@ contains
     
     implicit none
 
-    if (qctyp.eq.1) then
+    if (qctyp.eq.4) then
        ! Columbus
        call getdim_columbus
-    else if (qctyp.eq.2) then
+    else if (qctyp.eq.5) then
        ! Turbomole, ricc2
        call getdim_ricc2
     endif
@@ -195,22 +195,36 @@ contains
 
     implicit none
 
-    integer            :: unit,n
-    character(len=150) :: filename,string
+    integer                  :: n
+    real(d), dimension(nsta) :: etmp
+    character(len=150)       :: filename
 
-    if (qctyp.eq.1) then
+!----------------------------------------------------------------------
+! Read the energies of the electronic states in au
+!----------------------------------------------------------------------
+    if (qctyp.eq.4) then
        ! Columbus
-       call rdener_columbus
-    else if (qctyp.eq.2) then
+       filename=trim(qcfile(1))//'/LISTINGS/ciudgsm.drt1.sp'
+       call rdener_columbus(etmp,filename)
+    else if (qctyp.eq.5) then
        ! Turbomole, ricc2
-       call rdener_ricc2
+       call rdener_ricc2(etmp,qcfile(1))
     endif
+
+!----------------------------------------------------------------------
+! Convert to excitation energies in eV relative to the ground state
+!----------------------------------------------------------------------
+    ! Excitation energies in eV
+    do n=2,nsta
+       ener(n)=(etmp(n)-etmp(1))*eh2ev
+    enddo
+    ener(1)=0.0d0
 
   end subroutine rdener
 
 !######################################################################
 
-  subroutine rdener_columbus
+  subroutine rdener_columbus(e,filename)
 
     use constants
     use iomod
@@ -218,15 +232,16 @@ contains
 
     implicit none
 
-    integer            :: unit,n
-    character(len=150) :: filename,string
+    integer                  :: unit,n
+    real(d), dimension(nsta) :: e
+    character(len=150)       :: string
+    character(len=*)         :: filename
     
 !----------------------------------------------------------------------
 ! Read the Davidson corrected MRCI energies from ciudgsm.drt1.sp
 !----------------------------------------------------------------------
     ! Open file
     call freeunit(unit)
-    filename=trim(qcfile(1))//'/LISTINGS/ciudgsm.drt1.sp'
     open(unit,file=filename,form='formatted',status='old')
 
     ! Read the Davdson-corrected MRCI energies
@@ -234,7 +249,7 @@ contains
 5   read(unit,'(a)',end=999) string
     if (index(string,'eci+dv3').ne.0) then
        n=n+1
-       read(string,'(12x,F20.12)') ener(n)
+       read(string,'(12x,F20.12)') e(n)
        if (n.lt.nsta) goto 5
     else
        goto 5
@@ -242,12 +257,6 @@ contains
 
     ! Close file
     close(unit)
-
-    ! Excitation energies in eV
-    do n=2,nsta
-       ener(n)=(ener(n)-ener(1))*eh2ev
-    enddo
-    ener(1)=0.0d0
 
     return
 
@@ -259,7 +268,7 @@ contains
 
 !######################################################################
 
-  subroutine rdener_ricc2
+  subroutine rdener_ricc2(e,filename)
 
     use constants
     use iomod
@@ -267,34 +276,40 @@ contains
 
     implicit none
 
-    integer            :: unit,n
-    character(len=150) :: filename,string
-
+    integer                  :: unit,n
+    real(d), dimension(nsta) :: e
+    character(len=150)       :: string
+    character(len=*)         :: filename
+    
 !----------------------------------------------------------------------
 ! Open one of the ricc2 output files
 !----------------------------------------------------------------------
     call freeunit(unit)
-    open(unit,file=qcfile(1),form='formatted',status='old')
+    open(unit,file=filename,form='formatted',status='old')
 
 !----------------------------------------------------------------------
-! Set the ground state excitation energy
+! Read the ground state MP2 energy
 !----------------------------------------------------------------------
-    ener(n)=0.0d0
+5   read(unit,'(a)',end=888) string
+    if (index(string,'Final MP2 energy').eq.0) goto 5
     
+    read(string,'(50x,F18.10)') e(1)
+
 !----------------------------------------------------------------------
 ! Read to the excitation energy section
 !----------------------------------------------------------------------
-5   read(unit,'(a)') string
-    if (index(string,'||').eq.0) goto 5
+10  read(unit,'(a)',end=999) string
+    if (index(string,'||').eq.0) goto 10
     do n=1,3
        read(unit,*)
     enddo
     
 !----------------------------------------------------------------------
-! Read the excitation energies (in eV)
+! Read the excitation energies and compute the excited state energies
 !----------------------------------------------------------------------
     do n=2,nsta
-       read(unit,'(42x,F8.5)') ener(n)
+       read(unit,'(27x,F10.7)') e(n)
+       e(n)=e(n)+e(1)
     enddo
 
 !----------------------------------------------------------------------
@@ -304,6 +319,15 @@ contains
        
     return
 
+888 continue
+    errmsg='The MP2 energy could not be found in: '//trim(filename)
+    call error_control
+
+999 continue
+    errmsg='The excited state energies could not be found in: '&
+         //trim(filename)
+    call error_control
+    
   end subroutine rdener_ricc2
 
 !######################################################################
@@ -312,10 +336,10 @@ contains
 
     use global
     
-    if (qctyp.eq.1) then
+    if (qctyp.eq.4) then
        ! Columbus
        call rdgrad_columbus
-    else if (qctyp.eq.2) then
+    else if (qctyp.eq.5) then
        ! Turbomole, ricc2
        call rdgrad_ricc2
     endif
@@ -471,7 +495,7 @@ contains
 
     implicit none
 
-    if (qctyp.eq.1) then
+    if (qctyp.eq.4) then
        ! Columbus
        call rdnact_columbus
     endif
@@ -538,7 +562,7 @@ contains
 
     implicit none
 
-    if (qctyp.eq.1) then
+    if (qctyp.eq.4) then
        ! Columbus
        call rddip_columbus
     endif
@@ -629,6 +653,244 @@ contains
 
 !######################################################################
 
+  subroutine approx_lambda
+
+    use constants
+    use global
+    use iomod
+
+    implicit none
+
+    integer                              :: i,j,nfiles,n,m
+    integer, dimension(nmodes,2)         :: imap
+    real(d), dimension(:,:), allocatable :: xcoo,qcoo,e
+    real(d), dimension(nsta)             :: e0
+    real(d), dimension(nmodes)           :: dq
+    real(d)                              :: func,fplus,fminus,f0
+    real(d), parameter                   :: thrsh1=1e-3,thrsh2=1e-5
+    
+!-----------------------------------------------------------------------
+! Allocate and initialise arrays
+!-----------------------------------------------------------------------
+    !nfiles=size(lambdafiles)
+    nfiles=nlambdafiles
+    
+    allocate(xcoo(ncoo,nfiles))
+    xcoo=0.0d0
+
+    allocate(qcoo(ncoo,nfiles))
+    qcoo=0.0d0
+
+    allocate(e(nsta,nfiles))
+    e=0.0d0
+    
+!-----------------------------------------------------------------------
+! Read the Cartesian coordinates from each file
+!-----------------------------------------------------------------------
+    do i=1,nfiles
+       call getxcoo_1file(xcoo(:,i),lambdafile(i),qctyp)
+    enddo
+
+    ! Convert to displacements in angstrom relative to x0
+    do i=1,nfiles
+       xcoo(:,i)=(xcoo(:,i)-xcoo0)/ang2bohr
+    enddo
+    
+!-----------------------------------------------------------------------
+! Compute the normal mode coordinates for each file
+!-----------------------------------------------------------------------
+    do i=1,nfiles
+       qcoo(:,i)=matmul(coonm,xcoo(:,i))
+    enddo
+
+!-----------------------------------------------------------------------
+! Determine the step sizes for each mode
+!-----------------------------------------------------------------------
+    dq=0.0d0
+
+    do i=1,nfiles
+
+       ! Check: each geometry must correspond to displacement
+       ! along one, and only one normal mode
+       n=0
+       do j=1,nmodes
+          if (abs(qcoo(j,i)).gt.thrsh1) n=n+1          
+       enddo
+       if (n.gt.1) then
+          errmsg='Error in approx_lambda: more than one normal mode &
+               is displaced in the file: '//trim(lambdafile(i))
+          call error_control
+       endif
+
+       ! Determine the step size for th normal mode displaced
+       ! along in the current file
+       do j=1,nmodes
+          if (abs(qcoo(j,i)).gt.thrsh1) then
+             if (dq(j).eq.0.0d0) then
+                dq(j)=abs(qcoo(j,i))
+             else
+                if (abs(dq(j))-abs(qcoo(j,i)).gt.thrsh2) then
+                   errmsg=''
+                   write(errmsg,'(a,i2)') 'Error in approx_lambda: &
+                        unequal displacments for mode ',j
+                   call error_control
+                endif
+             endif
+          endif
+       enddo
+       
+    enddo
+
+!-----------------------------------------------------------------------
+! Determine the mapping between the normal mode displacements and
+! the file numbers:
+!
+! imap(m,1) <-> index of the file corresponding to the positive
+!               displacement along mode m
+! imap(m,2) <-> index of the file corresponding to the negative
+!               displacement along mode m
+!-----------------------------------------------------------------------
+    imap=0
+    do i=1,nfiles
+       do j=1,nmodes
+          if (abs(qcoo(j,i)).gt.thrsh1) then
+             if (qcoo(j,i).gt.0.0d0) then
+                imap(j,1)=i
+             else
+                imap(j,2)=i
+             endif
+          endif
+       enddo
+    enddo
+
+!-----------------------------------------------------------------------
+! Read the energies for each file
+!-----------------------------------------------------------------------
+    do i=1,nfiles
+       call rdener_1file(e(:,i),lambdafile(i),qctyp)
+    enddo
+
+!-----------------------------------------------------------------------
+! Read the energies at the reference geometry
+!-----------------------------------------------------------------------
+    call rdener_1file(e0,qcfile(1),qctyp)
+
+!-----------------------------------------------------------------------
+! Compute the approximate lambda values:
+!
+! lambda_m^(i,j) ~ sqrt( 1/8 d^2 (V_i - V_j)**2/d Q_m^2
+!                       - 1/4 (kappa_m^(i)**2 + kappa_m^(j)**2)
+!                       + 1/2 kappa_m^(i) kappa_m^(j))
+!-----------------------------------------------------------------------
+    ! Loop over the normal modes
+    do m=1,nmodes
+
+       ! Cycle if we don't have all the output required for the
+       ! current mode
+       if (imap(m,1).eq.0.or.imap(m,2).eq.0) cycle
+
+       ! Calculate the approximation to lambda_m^(i,j) for
+       ! all pairs of states
+       do i=1,nsta-1
+          do j=i+1,nsta
+
+             fplus=(e(i,imap(m,1))-e(j,imap(m,1)))**2
+             fminus=(e(i,imap(m,2))-e(j,imap(m,2)))**2
+             f0=(e0(i)-e0(j))**2
+
+             func=(1.0d0/8.0d0)*(fplus+fminus-2.0d0*f0)/(dq(m)**2)
+             
+             func=func-0.25d0*(kappa(m,i)**2+kappa(m,j)**2)&
+                  +0.5d0*kappa(m,i)*kappa(m,j)
+
+             ! DOES THIS MAKE SENSE?
+             if (func.gt.0.0d0) then
+                func=sqrt(abs(func))
+                
+                lambda(m,i,j)=func*eh2ev
+                lambda(m,j,i)=lambda(m,i,j)
+             endif
+             
+          enddo
+       enddo
+
+    enddo
+    
+!-----------------------------------------------------------------------
+! Deallocate arrays
+!-----------------------------------------------------------------------
+    deallocate(xcoo)
+    deallocate(qcoo)
+    deallocate(e)
+    
+    return
+    
+  end subroutine approx_lambda
+
+!######################################################################
+
+  subroutine getxcoo_1file(xcoo,filename,ityp)
+
+    use constants
+    use iomod
+    use global
+    
+    implicit none
+    
+    integer                  :: ityp,unit
+    real(d), dimension(ncoo) :: xcoo
+    character(len=*)         :: filename
+
+    if (ityp.eq.1) then
+       ! G98
+       call getxcoo_g98(xcoo,filename)
+    else if (ityp.eq.2) then
+       ! CFOUR
+       call getxcoo_cfour(xcoo,filename)
+    else if (ityp.eq.4) then
+       ! Columbus: not yet implemented
+       errmsg='The getxcoo_columbus subroutine still needs to be &
+            written...'
+       call error_control
+    else if (ityp.eq.5) then
+       ! Turbomole, ricc2
+       call getxcoo_ricc2(xcoo,filename)
+    endif
+       
+    return
+    
+  end subroutine getxcoo_1file
+    
+!######################################################################
+
+  subroutine rdener_1file(e,filename,ityp)
+
+    use constants
+    use iomod
+    use global
+    
+    implicit none
+    
+    integer                  :: ityp,unit
+    real(d), dimension(nsta) :: e
+    character(len=*)         :: filename
+    character(len=250)       :: aciudgsm
+    
+    if (ityp.eq.4) then
+       ! Columbus
+       aciudgsm=trim(filename)//'/LISTINGS/ciudgsm.drt1.sp'
+       call rdener_columbus(e,aciudgsm)
+    else if (ityp.eq.5) then
+       ! Turbomole, ricc2
+       call rdener_ricc2(e,filename)
+    endif
+
+    return
+
+  end subroutine rdener_1file
+
+!######################################################################
+       
   subroutine rdfreqfile
 
     use constants
@@ -640,7 +902,7 @@ contains
 !----------------------------------------------------------------------
 ! Read the reference Cartesian coordinates
 !----------------------------------------------------------------------
-    call getxcoo
+    call getxcoo0
 
 !----------------------------------------------------------------------
 ! Read the normal modes, frequencies and symmetry labels
@@ -708,8 +970,8 @@ contains
 ! qctype: determines the quantum chemistry program used for the
 !         coupling coefficient calculations
 !
-!         qctyp = 1 <-> Columbus
-!                 2 <-> Turbomole, ricc2
+!         qctyp = 4 <-> Columbus
+!                 5 <-> Turbomole, ricc2
 !######################################################################
   subroutine qctype
 
@@ -730,10 +992,10 @@ contains
 !----------------------------------------------------------------------
     if (iscolumbus(qcfile(1))) then
        ! Columbus
-       qctyp=1
+       qctyp=4
     else if (isricc2(qcfile(1))) then
        ! Turbomole, ricc2
-       qctyp=2
+       qctyp=5
     endif
 
 !----------------------------------------------------------------------
@@ -749,11 +1011,11 @@ contains
 ! Set the logical flags controling what is to be read from the
 ! quantum chemistry output
 !----------------------------------------------------------------------
-    if (qctyp.eq.1) then
+    if (qctyp.eq.4) then
        ! Columbus: gradients and NACTs
        lgrad=.true.
        lnact=.true.
-    else if (qctyp.eq.2) then
+    else if (qctyp.eq.5) then
        ! Turbomole, ricc2: gradients only
        lgrad=.true.
     endif
@@ -880,7 +1142,7 @@ contains
     endif
 
 !----------------------------------------------------------------------
-! Open the frequency file
+! Open file
 !----------------------------------------------------------------------
     call freeunit(unit)
     open(unit,file=filename,form='formatted',status='old')
@@ -896,7 +1158,7 @@ contains
     endif
 
 !----------------------------------------------------------------------
-! Close the frequency file
+! Close file
 !----------------------------------------------------------------------
     close(unit)
 
@@ -966,7 +1228,7 @@ contains
     endif
 
 !----------------------------------------------------------------------
-! Open the frequency file
+! Open file
 !----------------------------------------------------------------------
     call freeunit(unit)
     open(unit,file=filename,form='formatted',status='old')
@@ -982,7 +1244,7 @@ contains
     endif
 
 !----------------------------------------------------------------------
-! Close the frequency file
+! Close file
 !----------------------------------------------------------------------
     close(unit)
 
@@ -992,7 +1254,7 @@ contains
 
 !######################################################################
 
-  subroutine getxcoo
+  subroutine getxcoo0
 
     use constants
     use global
@@ -1000,6 +1262,8 @@ contains
 
     implicit none
 
+    real(d), dimension(ncoo) :: xcoo
+    
 !----------------------------------------------------------------------
 ! Initialisation
 !----------------------------------------------------------------------
@@ -1011,22 +1275,27 @@ contains
 !----------------------------------------------------------------------
     if (freqtyp.eq.1) then
        ! G98
-       call getxcoo_g98
+       call getxcoo_g98(xcoo,freqfile)
     else if (freqtyp.eq.2) then
        ! CFOUR
-       call getxcoo_cfour
+       call getxcoo_cfour(xcoo,freqfile)
     else if (freqtyp.eq.3) then
        ! Hessian
-       call getxcoo_hessian
+       call getxcoo_hessian(xcoo,freqfile)
     endif
 
+!----------------------------------------------------------------------
+! Fill in the xcoo0 array
+!----------------------------------------------------------------------
+    xcoo0=xcoo
+    
     return
 
-  end subroutine getxcoo
+  end subroutine getxcoo0
 
 !######################################################################
   
-  subroutine getxcoo_g98
+  subroutine getxcoo_g98(xcoo,filename)
 
     use constants
     use global
@@ -1034,14 +1303,16 @@ contains
 
     implicit none
   
-    integer            :: unit,i,j
-    character(len=120) :: string
+    integer                  :: unit,i,j
+    real(d), dimension(ncoo) :: xcoo
+    character(len=*)         :: filename
+    character(len=120)       :: string
 
 !----------------------------------------------------------------------
-! Open the frequency file
+! Open file
 !----------------------------------------------------------------------
     call freeunit(unit)
-    open(unit,file=freqfile,form='formatted',status='old')
+    open(unit,file=filename,form='formatted',status='old')
 
 !----------------------------------------------------------------------
 ! Read the Cartesian coordinates
@@ -1054,16 +1325,16 @@ contains
     enddo
 
     do i=1,natm
-       read(unit,'(14x,i2,18x,3F12.6)') atnum(i),(xcoo0(j), j=i*3-2,i*3)
+       read(unit,'(14x,i2,18x,3F12.6)') atnum(i),(xcoo(j), j=i*3-2,i*3)
        atlbl(i)=num2lbl(atnum(i))
        mass(i*3-2:i*3)=num2mass(atnum(i))
     enddo
 
     ! Convert to Bohr
-    xcoo0=xcoo0*ang2bohr
+    xcoo=xcoo*ang2bohr
 
 !----------------------------------------------------------------------
-! Close the frequency file
+! Close file
 !----------------------------------------------------------------------
     close(unit)
 
@@ -1071,14 +1342,14 @@ contains
 
 999 continue
     errmsg='The Cartesian coordinates could not be found in: '&
-         //trim(freqfile)
+         //trim(filename)
     call error_control
 
   end subroutine getxcoo_g98
 
 !######################################################################
 
-  subroutine getxcoo_cfour
+  subroutine getxcoo_cfour(xcoo,filename)
 
     use constants
     use iomod
@@ -1086,19 +1357,21 @@ contains
 
     implicit none
 
-    integer            :: unit,i,n
-    logical            :: found
-    character(len=120) :: string
-    character(len=2)   :: atmp
+    integer                  :: unit,i,n
+    real(d), dimension(ncoo) :: xcoo
+    logical                  :: found
+    character(len=*)         :: filename
+    character(len=120)       :: string
+    character(len=2)         :: atmp
 
 !----------------------------------------------------------------------
 ! First check to make sure that the cfour.log file exists
 !----------------------------------------------------------------------
-    inquire(file=trim(freqfile)//'/cfour.log',exist=found)
+    inquire(file=trim(filename)//'/cfour.log',exist=found)
 
     if (.not.found) then
        errmsg='The CFOUR log file is assumed to be named cfour.log. &
-            This file could not be found in: '//trim(freqfile)
+            This file could not be found in: '//trim(filename)
        call error_control
     endif
 
@@ -1106,7 +1379,7 @@ contains
 ! Open the CFOUR log file
 !----------------------------------------------------------------------
     call freeunit(unit)
-    open(unit,file=trim(freqfile)//'/cfour.log',form='formatted',&
+    open(unit,file=trim(filename)//'/cfour.log',form='formatted',&
          status='old')
 
 !----------------------------------------------------------------------
@@ -1125,7 +1398,7 @@ contains
        if (string(6:6).ne.'X') then
           n=n+1
           read(string,'(5x,a2,8x,i2,3x,3(F15.8))') &
-               atlbl(n),atnum(n),(xcoo0(i), i=n*3-2,n*3)
+               atlbl(n),atnum(n),(xcoo(i), i=n*3-2,n*3)
           mass(n*3-2:n*3)=num2mass(atnum(n))
        else
           ldum=.true.
@@ -1143,14 +1416,14 @@ contains
 
 999 continue
     errmsg='The Cartesian coordinates could not be found in: '&
-         //trim(freqfile)//'/cfour.log'
+         //trim(filename)//'/cfour.log'
     call error_control
 
   end subroutine getxcoo_cfour
 
 !######################################################################
 
-  subroutine getxcoo_hessian
+  subroutine getxcoo_hessian(xcoo,filename)
 
     use constants
     use iomod
@@ -1158,28 +1431,30 @@ contains
 
     implicit none
 
-    integer          :: unit,i,j
+    integer                  :: unit,i,j
+    real(d), dimension(ncoo) :: xcoo
+    character(len=*)         :: filename
 
 !----------------------------------------------------------------------
-! Open the frequency file
+! Open file
 !----------------------------------------------------------------------
     call freeunit(unit)
-    open(unit,file=freqfile,form='formatted',status='old')
+    open(unit,file=filename,form='formatted',status='old')
 
 !----------------------------------------------------------------------
 ! Read the Cartesian coordinates
 !----------------------------------------------------------------------
     read(unit,*)
     do i=1,natm
-       read(unit,*) atlbl(i),(xcoo0(j), j=i*3-2,i*3)
+       read(unit,*) atlbl(i),(xcoo(j), j=i*3-2,i*3)
        mass(i*3-2:i*3)=lbl2mass(atlbl(i))
     enddo
 
     ! Convert to Bohr
-    xcoo0=xcoo0*ang2bohr
+    xcoo=xcoo*ang2bohr
     
 !----------------------------------------------------------------------
-! Close the frequency file
+! Close file
 !----------------------------------------------------------------------
     close(unit)
 
@@ -1187,6 +1462,52 @@ contains
 
   end subroutine getxcoo_hessian
 
+!######################################################################
+
+  subroutine getxcoo_ricc2(xcoo,filename)
+
+    use constants
+    use iomod
+    use global
+    
+    implicit none
+
+    integer                  :: unit,i,j
+    real(d), dimension(ncoo) :: xcoo
+    character(len=*)         :: filename
+    character(len=150)       :: string
+
+!----------------------------------------------------------------------
+! Open file
+!----------------------------------------------------------------------
+    call freeunit(unit)
+    open(unit,file=trim(filename),form='formatted',status='old')
+
+!----------------------------------------------------------------------
+! Read the Cartesian coordinates
+!----------------------------------------------------------------------
+5   read(unit,'(a)',end=999) string
+    if (index(string,'atomic coordinates').eq.0) goto 5
+
+    do i=1,natm
+       read(unit,'(1x,3(F14.8),15x,i2)') (xcoo(j), j=i*3-2,i*3),atnum(i)
+       atlbl(i)=num2lbl(atnum(i))
+       mass(i*3-2:i*3)=num2mass(atnum(i))
+    enddo
+
+!----------------------------------------------------------------------
+! Close file
+!----------------------------------------------------------------------
+    close(unit)
+
+    return
+
+999 continue
+    errmsg='The geometry section could not be found in '//trim(qcfile(1))
+    call error_control
+    
+  end subroutine getxcoo_ricc2
+    
 !######################################################################
 
   function num2lbl(num) result(lbl)
@@ -1839,7 +2160,7 @@ contains
 
 !#######################################################################
 ! nmcoo transforms from nmodes to coo  x = nmcoo*Q
-! coonm transforms from coo to nmodes  Q = coonm*x
+! coonm transforms from coo to nmodes  Q = coonm*(x-x0)
 !
 ! freq in ev, mass in amu, x in Angstrom
 !#######################################################################

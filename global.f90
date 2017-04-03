@@ -7,32 +7,36 @@ module global
   save
 
   ! I/O
-  integer                                     :: freqtyp,qctyp
-  character(len=120)                          :: freqfile
-  character(len=120), dimension(50)           :: qcfile
-  logical                                     :: outau
+  integer                                       :: freqtyp,qctyp,&
+                                                   nlambdafiles
+  character(len=120)                            :: freqfile
+  character(len=120), dimension(50)             :: qcfile
+  !character(len=250), dimension(:), allocatable :: lambdafile
+  character(len=250), dimension(200)            :: lambdafile
+  logical                                       :: outau,inpfile
 
   ! System information
-  integer                                     :: natm,ncoo,nmodes,nsta
-  integer, dimension(:), allocatable          :: atnum
-  real(d), dimension(:), allocatable          :: mass,xcoo0
-  character(len=2), dimension(:), allocatable :: atlbl
+  integer                                       :: natm,ncoo,nmodes,nsta
+  integer, dimension(:), allocatable            :: atnum
+  real(d), dimension(:), allocatable            :: mass,xcoo0
+  character(len=2), dimension(:), allocatable   :: atlbl
 
   ! Energies, gradients, NACTs and 
   ! dipole matrix elements
-  real(d), dimension(:), allocatable          :: ener
-  real(d), dimension(:,:), allocatable        :: grad,kappa
-  real(d), dimension(:,:,:), allocatable      :: nact,lambda
-  real(d), dimension(:,:,:), allocatable      :: dipole
-  logical                                     :: lgrad,lnact
+  real(d), dimension(:), allocatable            :: ener
+  real(d), dimension(:,:), allocatable          :: grad,kappa
+  real(d), dimension(:,:,:), allocatable        :: nact,lambda
+  real(d), dimension(:,:,:), allocatable        :: dipole
+  logical                                       :: lgrad,lnact,&
+                                                   laprxlambda
 
   ! Normal modes
-  real(d), dimension(:,:), allocatable        :: nmcoo,coonm
-  real(d), dimension(:), allocatable          :: freq
-  character(len=3), dimension(:), allocatable :: nmlab
+  real(d), dimension(:,:), allocatable          :: nmcoo,coonm
+  real(d), dimension(:), allocatable            :: freq
+  character(len=3), dimension(:), allocatable   :: nmlab
 
   ! H_ML (Interaction with an external field)
-  real(d)                                     :: omega,t0,sigma,I0
-  logical                                     :: hml
+  real(d)                                       :: omega,t0,sigma,I0
+  logical                                       :: hml
 
 end module global

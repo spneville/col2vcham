@@ -13,6 +13,8 @@ program qc2vcham
 
   implicit none
 
+  integer :: i
+  
 !----------------------------------------------------------------------
 ! Initialisation
 !----------------------------------------------------------------------
@@ -41,18 +43,6 @@ program qc2vcham
   call alloc
 
 !----------------------------------------------------------------------
-! Read the energies, Cartesian gradients and NACTs
-!----------------------------------------------------------------------
-  call rdener
-  if (lgrad) call rdgrad
-  if (lnact) call rdnact
-
-!----------------------------------------------------------------------
-! If needed, read the dipole matrix elements
-!----------------------------------------------------------------------
-  if (hml) call rddip
-
-!----------------------------------------------------------------------
 ! Read the frequency file: normal modes and reference geometry
 !----------------------------------------------------------------------
   call rdfreqfile
@@ -61,13 +51,31 @@ program qc2vcham
 ! Create the transformation matrices
 !----------------------------------------------------------------------
   call nm2xmat
-
+  
+!----------------------------------------------------------------------
+! Read the energies, Cartesian gradients and NACTs
+!----------------------------------------------------------------------
+  call rdener
+  if (lgrad) call rdgrad
+  if (lnact) call rdnact
+  
+!----------------------------------------------------------------------
+! If needed, read the dipole matrix elements
+!----------------------------------------------------------------------
+  if (hml) call rddip
+  
 !----------------------------------------------------------------------
 ! Transform the gradient and NACT vectors
 !----------------------------------------------------------------------
-  call transgrad
-  call transnact
+  if (lgrad) call transgrad
+  if (lnact) call transnact
 
+!----------------------------------------------------------------------
+! If needed, determine approximate lambda values from the numerical
+! 2nd-derivatives of the squared adiabatic energy differences
+!----------------------------------------------------------------------
+  if (laprxlambda) call approx_lambda
+  
 !----------------------------------------------------------------------
 ! If requested, convert the LVC parameters to a.u.
 !----------------------------------------------------------------------
@@ -134,8 +142,7 @@ contains
 
     implicit none
 
-    integer            :: n,k
-    character(len=120) :: string1,string2
+    character(len=120) :: string
 
 !----------------------------------------------------------------------
 ! Initialisation
@@ -161,6 +168,75 @@ contains
     ! Peak intensity (W/cm^2)
     I0=-999.0d0
 
+    ! Approximate lambda calculation
+    laprxlambda=.false.
+    
+!----------------------------------------------------------------------
+! If no arguments have been given, print the input options to the
+! screen and then quit
+!----------------------------------------------------------------------
+    if (iargc().eq.0) call wrhelp
+    
+!----------------------------------------------------------------------
+! Determine whether the input is given via an input file or the
+! command line
+!----------------------------------------------------------------------
+    call getarg(1,string)
+    
+    if (string(1:1).eq.'-') then
+       inpfile=.false.
+    else
+       inpfile=.true.
+    endif
+
+!----------------------------------------------------------------------
+! Read the input
+!----------------------------------------------------------------------
+    if (inpfile) then
+       call rdinput_inpfile
+    else
+       call rdinput_cmdline
+    end if
+
+!----------------------------------------------------------------------
+! Make sure that all the required information has been given
+!----------------------------------------------------------------------
+    if (freqfile.eq.'') then
+       errmsg="The frequency file has not been given"
+       call error_control
+    endif
+
+    if (qcfile(1).eq.'') then
+       errmsg="The quantum chemisty filename/directory has not &
+            been given"
+       call error_control
+    endif
+
+!----------------------------------------------------------------------
+! Output some information to the log file
+!----------------------------------------------------------------------
+    write(ilog,'(/,2(2x,a))') "Frequency file:",trim(freqfile)
+    write(ilog,'(/,2(2x,a))') "Quantum chemistry filename/directoty:",&
+         trim(qcfile(1))
+
+    return
+ 
+  end subroutine rdinput
+
+!######################################################################
+
+  subroutine rdinput_cmdline
+
+    use constants
+    use global
+    use iomod
+    use channels
+
+    implicit none
+
+    integer            :: n,k
+    character(len=120) :: string1,string2
+    
 !----------------------------------------------------------------------
 ! Read the command line arguments
 !----------------------------------------------------------------------
@@ -209,32 +285,179 @@ contains
     endif
 
     if (n.lt.iargc()) goto 5
-
-!----------------------------------------------------------------------
-! Make sure that all the required information has been given
-!----------------------------------------------------------------------
-    if (freqfile.eq.'') then
-       errmsg="The frequency file has not been given"
-       call error_control
-    endif
-
-    if (qcfile(1).eq.'') then
-       errmsg="The quantum chemisty filename/directory has not &
-            been given"
-       call error_control
-    endif
-
-!----------------------------------------------------------------------
-! Output some information to the log file
-!----------------------------------------------------------------------
-    write(ilog,'(/,2(2x,a))') "Frequency file:",trim(freqfile)
-    write(ilog,'(/,2(2x,a))') "Quantum chemistry filename/directoty:",&
-         trim(qcfile(1))
-
+    
     return
- 
-  end subroutine rdinput
+    
+  end subroutine rdinput_cmdline
 
+!######################################################################
+
+  subroutine rdinput_inpfile
+
+    use constants
+    use global
+    use iomod
+    use channels
+    use parsemod
+    
+    implicit none
+
+    integer            :: i,n,k
+    character(len=120) :: filename
+    
+!----------------------------------------------------------------------
+! Get the name of the input file
+!----------------------------------------------------------------------
+    call getarg(1,filename)
+
+    if (index(filename,'.inp').eq.0) filename=trim(filename)//'.inp'
+
+!----------------------------------------------------------------------
+! Open the input file
+!----------------------------------------------------------------------
+    call freeunit(iin)
+    open(iin,file=filename,form='formatted',status='old')
+    
+!----------------------------------------------------------------------    
+! Read the input file
+!----------------------------------------------------------------------
+5   continue
+    call rdinp(iin)
+
+    i=0
+    if (.not.lend) then
+
+10     continue
+       i=i+1
+
+       if (keyword(i).eq.'freqfile') then
+          if (keyword(i+1).eq.'=') then
+             i=i+2
+             freqfile=keyword(i)
+          else
+             goto 100
+          endif
+
+       else if (keyword(i).eq.'qcfiles') then
+          n=0
+15        continue
+          call rdinp(iin)
+          if (keyword(1).ne.'end-qcfiles') then
+             n=n+1
+             qcfile(n)=keyword(1)
+             goto 15
+          endif
+
+       else if (keyword(i).eq.'hml') then
+          hml=.true.
+          if (keyword(i+1).eq.'=') then
+             i=i+2
+             read(keyword(i),*) omega
+             if (keyword(i+1).ne.',') then
+                errmsg='The t0 argument has not been given with &
+                     the hml keyword'
+                call error_control
+             endif
+             i=i+2
+             read(keyword(i),*) t0
+             if (keyword(i+1).ne.',') then
+                errmsg='The sigma argument has not been given with &
+                     the hml keyword'
+                call error_control
+             endif
+             i=i+2
+             read(keyword(i),*) sigma
+             if (keyword(i+1).ne.',') then
+                errmsg='The I0 argument has not been given with &
+                     the hml keyword'
+                call error_control
+             endif
+             i=i+2
+             read(keyword(i),*) I0
+          else
+             goto 100
+          endif
+
+       else if (keyword(i).eq.'au') then
+          outau=.true.
+
+       else if (keyword(i).eq.'lambda_files') then
+          laprxlambda=.true.
+          ! Determine the no. files and allocate arrays
+          !n=nlambdafiles(filename)
+          !allocate(lambdafile(n))
+          ! Read the names of the files
+          nlambdafiles=0
+20        call rdinp(iin)
+          if (keyword(1).ne.'end-lambda_files') then
+             nlambdafiles=nlambdafiles+1
+             lambdafile(nlambdafiles)=keyword(1)
+             goto 20
+          endif
+          
+       else
+          ! Exit if the keyword is not recognised
+          errmsg='Unknown keyword: '//trim(keyword(i))
+          call error_control
+       endif
+
+       ! If there are more keywords to be read on the current line,
+       ! then read them, else read the next line
+       if (i.lt.inkw) then
+          goto 10
+       else
+          goto 5
+       endif
+       
+       ! Exit if a required argument has not been given with a keyword
+100    continue
+       errmsg='No argument given with the keyword '//trim(keyword(i))
+       call error_control
+       
+    endif
+
+!----------------------------------------------------------------------
+! Close the input file
+!----------------------------------------------------------------------
+    close(iin)
+    
+    return
+    
+  end subroutine rdinput_inpfile
+
+!######################################################################
+
+!  function nlambdafiles(filename) result(n)
+!
+!    use channels
+!    use constants
+!    
+!    implicit none
+!
+!    integer            :: n,i
+!    character(len=*)   :: filename
+!    character(len=120) :: string
+!
+!!----------------------------------------------------------------------
+!! Determine the no. files
+!!----------------------------------------------------------------------  
+!5   read(iin,'(a)') string
+!    if (index(string,'end-lambda_files').eq.0) then
+!       n=n+1
+!       goto 5
+!    endif
+!
+!!----------------------------------------------------------------------
+!! Rewind back to the original postion in the input file
+!!----------------------------------------------------------------------
+!    do i=1,n+1
+!       backspace(iin)
+!    enddo
+!
+!    return
+!    
+!  end function nlambdafiles
+  
 !######################################################################
 
   subroutine wrhelp
@@ -968,7 +1191,8 @@ contains
     deallocate(coonm)
     deallocate(kappa)
     deallocate(lambda)
-
+    !if (allocated(lambdafile)) deallocate(lambdafile)
+    
     return
     
   end subroutine finalise
