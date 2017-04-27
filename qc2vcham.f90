@@ -170,7 +170,7 @@ contains
 
     ! Approximate lambda calculation
     laprxlambda=.false.
-    
+
 !----------------------------------------------------------------------
 ! If no arguments have been given, print the input options to the
 ! screen and then quit
@@ -587,7 +587,7 @@ contains
     real(d), dimension(ncoo,nsta) :: tmpvec
 
 !-----------------------------------------------------------------------
-! coonm transforms from angstrom to q, and the gradients have been
+! nmcoo transforms from angstrom to Q, and the gradients have been
 ! read in a.u.
 ! Hence, we rescale the gradients here
 !-----------------------------------------------------------------------
@@ -597,7 +597,7 @@ contains
 ! Transform the gradients to the normal mode basis
 !-----------------------------------------------------------------------
     do s=1,nsta
-       kappa(:,s)=matmul(transpose(nmcoo),tmpvec(:,s))       
+       kappa(:,s)=matmul(transpose(nmcoo),tmpvec(:,s))
     enddo
 
 !-----------------------------------------------------------------------
@@ -622,7 +622,7 @@ contains
     real(d), dimension(ncoo,nsta,nsta) :: tmpvec
 
 !-----------------------------------------------------------------------
-! coonm transforms from angstrom to q, and the NACTs have been
+! coonm transforms from angstrom to Q, and the NACTs have been
 ! read in a.u.
 ! Hence, we rescale the NACTs here
 !-----------------------------------------------------------------------
@@ -633,7 +633,7 @@ contains
 !-----------------------------------------------------------------------
     do s1=1,nsta
        do s2=1,nsta
-          lambda(:,s1,s2)=matmul(transpose(nmcoo),tmpvec(:,s1,s2))       
+          lambda(:,s1,s2)=matmul(transpose(nmcoo),tmpvec(:,s1,s2))
        enddo
     enddo
 

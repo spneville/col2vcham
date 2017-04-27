@@ -1601,6 +1601,8 @@ contains
 
     implicit none
 
+    integer :: i,j
+
 !----------------------------------------------------------------------
 ! Read the normal modes from file
 !----------------------------------------------------------------------
@@ -1707,6 +1709,9 @@ contains
 
 !-----------------------------------------------------------------------
 ! Scale to mass-weighted x to obtain true normal mode vectors
+!
+! N.B. This has to be done as Gaussian prints the normal mode vectors
+!      in terms of non-mass-weighted Cartesians
 !-----------------------------------------------------------------------
     do nm=1,nmodes
        do j=1,ncoo
@@ -1761,6 +1766,7 @@ contains
     real(d), dimension(ncoo+3,ncoo+3) :: dumhess
     real(d), dimension(nmodes)        :: cffreq
     character(len=120)                :: string
+
 
 !**********************************************************************
 ! Note that cfour outputs the normal mode vectors to only a few
@@ -1993,14 +1999,9 @@ contains
 
 !-----------------------------------------------------------------------
 ! Normal mode vectors
-! (Scale to mass-weighted x to obtain true normal mode vectors)
 !-----------------------------------------------------------------------
     do i=7,ncoo
-       nmcoo(:,i-6)=eigvec(:,indx(i))       
-    enddo
-
-    do i=1,ncoo
-       nmcoo(i,:)=nmcoo(i,:)*sqrt(mass(i))
+       nmcoo(:,i-6)=eigvec(:,indx(i))
     enddo
 
     return
@@ -2162,7 +2163,7 @@ contains
 ! nmcoo transforms from nmodes to coo  x = nmcoo*Q
 ! coonm transforms from coo to nmodes  Q = coonm*(x-x0)
 !
-! freq in ev, mass in amu, x in Angstrom
+! freq in eV, mass in amu, x in non-mass-weighted Angstrom
 !#######################################################################
 
   subroutine nm2xmat
@@ -2173,7 +2174,7 @@ contains
     implicit none
 
     integer :: i,j
-      
+
 !-----------------------------------------------------------------------
 ! Transposition of nmcoo
 !-----------------------------------------------------------------------
