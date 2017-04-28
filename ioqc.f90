@@ -1622,6 +1622,11 @@ contains
 !----------------------------------------------------------------------
     call nmortho
 
+!----------------------------------------------------------------------
+! Write the normal modes to file for inspection
+!----------------------------------------------------------------------
+    call wrmodes
+
     return
 
   end subroutine getmodes
@@ -2158,6 +2163,49 @@ contains
     return
 
   end subroutine nmortho
+
+!#######################################################################
+
+  subroutine wrmodes
+
+    use constants
+    use global
+    use iomod
+
+    implicit none
+
+    integer          :: unit,i,j,k
+    character(len=2) :: amode
+
+!----------------------------------------------------------------------
+! Open the output file
+!----------------------------------------------------------------------
+    call freeunit(unit)
+    open(unit,file='modes.xyz',form='formatted',status='unknown')
+
+!----------------------------------------------------------------------
+! Write the normal modes and frequencies to file
+!----------------------------------------------------------------------
+    do i=1,nmodes
+       write(amode,'(i2)') i
+       write(unit,'(i2)') natm
+       write(unit,'(a,2x,F10.4,x,a)') &
+            'Q'//trim(adjustl(amode))//',',freq(i)/invcm2ev,'cm-1'
+       do j=1,natm
+          write(unit,'(a2,6(2x,F10.7))') atlbl(j),&
+               (xcoo0(k)/ang2bohr,k=j*3-2,j*3),&
+               (nmcoo(k,i)/sqrt(mass(k)),k=j*3-2,j*3)
+       enddo
+    enddo
+
+!----------------------------------------------------------------------
+! Close the output file
+!----------------------------------------------------------------------
+    close(unit)
+
+    return
+
+  end subroutine wrmodes
 
 !#######################################################################
 ! nmcoo transforms from nmodes to coo  x = nmcoo*Q
