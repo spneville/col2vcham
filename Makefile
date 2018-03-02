@@ -30,12 +30,25 @@ OBJ_PLTLVC = constants.o \
 	pltmod.o \
 	pltlvc.o
 
+OBJ_TRANSW0 = constants.o \
+	global.o \
+	transmod.o \
+	channels.o \
+	iomod.o \
+	utils.o \
+	ioqc.o \
+	transw0.o
+
 qc2vcham: $(OBJ)
 	$(F90) $(F90OPTS) $(OBJ) $(LIBS) -o qc2vcham
 	rm -f *.o *~ *.mod 2>/dev/null
 
 pltlvc: $(OBJ_PLTLVC)
 	$(F90) $(F90OPTS) $(OBJ_PLTLVC) $(LIBS) -o pltlvc
+	rm -f *.o *~ *.mod 2>/dev/null
+
+transw0: $(OBJ_TRANSW0)
+	$(F90) $(F90OPTS) $(OBJ_TRANSW0) $(LIBS) -o transw0
 	rm -f *.o *~ *.mod 2>/dev/null
 
 %.o: %.f90

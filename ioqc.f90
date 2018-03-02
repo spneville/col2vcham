@@ -914,12 +914,12 @@ contains
   end subroutine rdfreqfile
 
 !######################################################################
-! freqtyp: determines the quantum chemistry program used for the
-!          frequency calculation, and sets freqtyp accordingly:
+! freqtype: determines the quantum chemistry program used for the
+!           frequency calculation, and sets freqtyp accordingly:
 !          
-!          freqtyp = 1 <-> G98
-!                    2 <-> CFOUR
-!                    3 <-> Hessian file
+!           freqtyp = 1 <-> G98
+!                     2 <-> CFOUR
+!                     3 <-> Hessian file
 !######################################################################
   subroutine freqtype
 
@@ -1193,9 +1193,9 @@ contains
     endif
 
 !----------------------------------------------------------------------
-! Check to see if the cfour FCM file exists
+! Check to see if the cfour FCMFINAL file exists
 !----------------------------------------------------------------------
-    inquire(file=trim(filename)//'/FCM',exist=found)
+    inquire(file=trim(filename)//'/FCMFINAL',exist=found)
 
     return
 
@@ -1526,6 +1526,8 @@ contains
        lbl='C'
     else if (num.eq.7) then
        lbl='N'
+    else if (num.eq.8) then
+       lbl='O'
     else
        write(errmsg,'(a,x,i2,x,a)') 'The atomic number',num,&
             'is not supported. See function num2lbl.'
@@ -1554,6 +1556,8 @@ contains
        mass=12.0107d0
     else if (num.eq.7) then
        mass=14.0067d0
+    else if (num.eq.8) then
+       mass=15.9994d0
     else
        write(errmsg,'(a,x,i2,x,a)') 'The atomic number',num,&
             'is not supported. See function num2mass.'
@@ -1582,6 +1586,8 @@ contains
        mass=12.0107d0
     else if (lbl.eq.'N') then
        mass=14.0067d0
+    else if (lbl.eq.'O') then
+       mass=15.9994d0
     else
        errmsg='The atom type '//trim(lbl)//' is not supported.'&
             //' See function lbl2mass'
@@ -2245,6 +2251,157 @@ contains
   
   end subroutine nm2xmat
 
+!######################################################################
+! getnatm_freqfile: Determines the no. atoms, natm, from a frequency
+!                   file/directory
+!######################################################################
+  
+  subroutine getnatm_freqfile
+
+    use constants
+    use global
+    use iomod
+    
+    implicit none
+    
+    if (freqtyp.eq.1) then
+       ! G98
+       errmsg='Currently, G98 output files are not supported in &
+            subroutine getnatm_freqfile'
+       call error_control
+    else if (freqtyp.eq.2) then
+       ! CFOUR
+       call getnatm_freqfile_cfour(freqfile)
+    else if (freqtyp.eq.3) then
+       ! Hessian file
+       call getnatm_freqfile_hessian(freqfile)
+    endif
+    
+    return
+    
+  end subroutine getnatm_freqfile
+
+!######################################################################
+
+  subroutine getnatm_freqfile_cfour(filename)
+
+    use constants
+    use global
+    use iomod
+    
+    implicit none
+
+    integer            :: unit
+    logical            :: found
+    character(len=*)   :: filename
+    character(len=120) :: string
+
+!----------------------------------------------------------------------
+! First check to make sure that the cfour.log file exists
+!----------------------------------------------------------------------
+    inquire(file=trim(filename)//'/cfour.log',exist=found)
+
+    if (.not.found) then
+       errmsg='The CFOUR log file is assumed to be named cfour.log. &
+            This file could not be found in: '//trim(filename)
+       call error_control
+    endif
+
+!----------------------------------------------------------------------
+! Open the CFOUR log file
+!----------------------------------------------------------------------
+    call freeunit(unit)
+    open(unit,file=trim(filename)//'/cfour.log',form='formatted',&
+         status='old')
+    
+!----------------------------------------------------------------------
+! Read to the Cartesian coordinates
+!----------------------------------------------------------------------
+5   read(unit,'(a)',end=999) string
+    if (index(string,'Coordinates (in bohr)').eq.0) goto 5
+
+    read(unit,*)
+    read(unit,*)
+    
+!----------------------------------------------------------------------
+! Determine the number of atoms
+!----------------------------------------------------------------------
+    natm=0
+    
+10  read(unit,'(a)') string
+    if (string(2:2).ne.'-') then
+       natm=natm+1
+       goto 10
+    endif
+
+!----------------------------------------------------------------------
+! Close the CFOUR log file
+!----------------------------------------------------------------------
+    close(unit)
+    
+    return
+
+999 continue
+    errmsg='The Cartesian coordinate section could not be found in: '&
+         //trim(filename)//'/cfour.log'
+    call error_control
+    
+  end subroutine getnatm_freqfile_cfour
+
+!######################################################################
+
+  subroutine getnatm_freqfile_hessian(filename)
+
+    use constants
+    use global
+    use iomod
+    
+    implicit none
+
+    integer                         :: unit
+    character(len=*)                :: filename
+    character(len=120)              :: string
+    character(len=1), dimension(52) :: alphabet
+    
+    alphabet=(/ 'a','b','c','d','e','f','g','h','i','j','k','l','m',&
+         'n','o','p','q','r','s','t','u','v','w','x','y','z',&
+         'A','B','C','D','E','F','G','H','I','J','K','L','M',&
+         'N','O','P','Q','R','S','T','U','V','W','X','Y','Z'/)
+    
+    !print*,alphabet(1)
+    !stop
+
+!----------------------------------------------------------------------
+! Open the Hessian file
+!----------------------------------------------------------------------
+    call freeunit(unit)
+    open(unit,file=filename,form='formatted',status='old')
+
+!----------------------------------------------------------------------
+! Read the number of atoms from the Hessian file
+!----------------------------------------------------------------------
+    natm=0
+    
+    read(unit,*)
+    
+5   continue
+    read(unit,'(a)') string
+
+    ! Does the current line contain an atom name?
+    if (sum(scan(string,alphabet,.true.)).ne.0) then
+       natm=natm+1
+       goto 5       
+    endif
+
+!----------------------------------------------------------------------
+! Close the Hessian file
+!----------------------------------------------------------------------
+    close(unit)
+    
+    return
+    
+  end subroutine getnatm_freqfile_hessian
+  
 !######################################################################
 
 end module ioqc

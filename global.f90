@@ -11,7 +11,6 @@ module global
                                                    nlambdafiles
   character(len=120)                            :: freqfile
   character(len=120), dimension(50)             :: qcfile
-  !character(len=250), dimension(:), allocatable :: lambdafile
   character(len=250), dimension(200)            :: lambdafile
   logical                                       :: outau,inpfile
 
