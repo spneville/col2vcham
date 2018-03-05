@@ -69,6 +69,12 @@ program transw0
   call get_transw0
 
 !----------------------------------------------------------------------
+! For testing purposes, output the minimum geometry in terms of the
+! normal modes B
+!----------------------------------------------------------------------
+  call get_min_QB
+  
+!----------------------------------------------------------------------
 ! Output the transformed zeroth-order potential
 !----------------------------------------------------------------------
   call wrtransw0
@@ -215,6 +221,7 @@ contains
 
 !----------------------------------------------------------------------
 ! Set the number of coordinates
+! N.B. We are assuming a non-linear molecule here...
 !----------------------------------------------------------------------
     ncoo=3*natm
     nmodes=ncoo-6
@@ -456,7 +463,7 @@ contains
     call eckart_transmat(xcoo0B,iteigB)
 
     ! TEMPORARY: only translate
-    return
+    !return
     ! TEMPORARY: only translate
     
 !----------------------------------------------------------------------
@@ -539,7 +546,7 @@ contains
 
 
     ! TEMPORARY: only translate
-    return
+    !return
     ! TEMPORARY: only translate
     
 !-----------------------------------------------------------------------
@@ -642,8 +649,8 @@ contains
 ! point A and reference point B 
 !----------------------------------------------------------------------
     DeltaX=(xcoo0B-xcoo0A)/ang2bohr
-    DeltaQ=matmul(coonm,DeltaX)
-    
+    DeltaQ=matmul(coonmA,DeltaX)
+        
     return
     
   end subroutine get_DeltaQ
@@ -660,7 +667,7 @@ contains
     implicit none
 
     Smatrix=matmul(coonmA,nmcooB)
-    
+
     return
     
   end subroutine get_overlap
@@ -684,7 +691,7 @@ contains
     kappaB=0.0d0
     do i=1,nmodes
        do j=1,nmodes
-          kappaB(i)=kappaB(i)+Smatrix(i,j)*freqA(j)*DeltaQ(j)
+          kappaB(i)=kappaB(i)+Smatrix(j,i)*freqA(j)*DeltaQ(j)
        enddo
     enddo
 
@@ -695,7 +702,7 @@ contains
     do i=1,nmodes
        do j=1,nmodes
           do k=1,nmodes
-             gammaB(i,j)=gammaB(i,j)+Smatrix(i,k)*Smatrix(j,k)*freqA(k)
+             gammaB(i,j)=gammaB(i,j)+Smatrix(k,i)*Smatrix(k,j)*freqA(k)
           enddo
        enddo
     enddo
@@ -706,20 +713,139 @@ contains
 
 !######################################################################
 
+  subroutine get_min_QB
+
+    use constants
+    use iomod
+    use channels
+    use transmod
+    use global
+    
+    implicit none
+
+    integer                           :: i,j,info
+    integer, dimension(nmodes)        :: ipiv
+    real(d), dimension(nmodes)        :: Q0B
+    real(d), dimension(ncoo)          :: X0
+    real(d), dimension(nmodes,nmodes) :: tmp
+    real(d), dimension(nmodes)        :: gradient
+    
+!----------------------------------------------------------------------
+! Minumum point on the zeroth-order potential in terms of the normal
+! modes B
+!----------------------------------------------------------------------
+    ! LU factorisation of gammaB
+    tmp=gammaB
+    call dgetrf(nmodes,nmodes,tmp,nmodes,ipiv,info)
+    if (info.ne.0) then
+       errmsg='LU decomposition of gammaB failed'
+       call error_control
+    endif
+
+    ! Potential mimumum in terms of the normal modes B
+    Q0B=-kappaB
+    call dgetrs('N',nmodes,1,tmp,nmodes,ipiv,Q0B,nmodes,info)
+    if (info.ne.0) then
+       errmsg='Failed call to zgetrs'
+       call error_control
+    endif
+
+!----------------------------------------------------------------------
+! Conversion to Cartesian coordinates
+!----------------------------------------------------------------------
+    X0=(xcoo0B/ang2bohr)+matmul(nmcooB,Q0B)
+
+!----------------------------------------------------------------------
+! Output some information to the log file
+!----------------------------------------------------------------------
+    write(ilog,'(/,50a)') ('*',i=1,50)
+    write(ilog,'(3x,a)') 'Minimum geometry in terms of normal modes B'
+    write(ilog,'(50a)') ('*',i=1,50)
+    do i=1,nmodes
+       write(ilog,'(i2,2x,F10.7)') i,Q0B(i)
+    enddo
+    
+    !write(6,'(i1,/)') natm
+    !do i=1,natm
+    !   write(6,'(a1,3(2x,F12.7))') atlbl(i),(X0(j),j=i*3-2,i*3)
+    !enddo
+    !
+    !write(6,'(i1,/)') natm
+    !do i=1,natm
+    !   write(6,'(a1,3(2x,F12.7))') atlbl(i),(xcoo0A(j)/ang2bohr,j=i*3-2,i*3)
+    !enddo
+    !
+    !stop
+    
+    return
+    
+  end subroutine get_min_QB
+    
+!######################################################################
+  
   subroutine wrtransw0
 
     use constants
     use iomod
+    use channels
     use transmod
     use global
 
     implicit none
 
-    print*,
-    print*,"Write wrtransw0!"
-    print*,
-    stop
+    integer            :: i,m1,m2
+    real(d), parameter :: thrsh=1e-5
+    real(d)            :: par
+    character(len=2)   :: am1,am2
+
+!----------------------------------------------------------------------
+! Section header
+!----------------------------------------------------------------------
+    write(ilog,'(/,50a)') ('*',i=1,50)
+    write(ilog,'(8x,a)') 'Transformed zeroth-order potential'
+    write(ilog,'(50a)') ('*',i=1,50)
     
+!----------------------------------------------------------------------
+! First-order terms
+!----------------------------------------------------------------------
+    write(ilog,'(/,a)') '# 1st-order transformed zeroth-order &
+         potential terms'
+    do m1=1,nmodes
+       if (abs(kappaB(m1)).lt.thrsh) cycle
+       write(am1,'(i2)') m1
+       write(ilog,'(a,F9.6,a)') 'kappaB'//'_'//trim(adjustl(am1))// &
+            ' = ',kappaB(m1),' , ev'
+    enddo
+
+!----------------------------------------------------------------------
+! Second-order terms
+!----------------------------------------------------------------------
+    write(ilog,'(/,a)') '# 2nd-order transformed zeroth-order &
+         potential terms'
+
+    ! Loop over the unique pairs of modes
+    do m1=1,nmodes
+       do m2=m1,nmodes
+
+          ! Take account of the fact that we will only write the
+          ! unique pairs to the operator file
+          if (m1.eq.m2) then
+             par=gammaB(m1,m2)
+          else
+             par=2.0d0*gammaB(m1,m2)
+          endif
+          
+          if (abs(par).lt.thrsh) cycle
+
+          write(am1,'(i2)') m1
+          write(am2,'(i2)') m2
+          write(ilog,'(a,F9.6,a)') 'gammaB'//'_'&
+               //trim(adjustl(am1))//'_'//trim(adjustl(am2))&
+               //' = ',par,' , ev'
+          
+       enddo
+    enddo
+          
     return
     
   end subroutine wrtransw0
