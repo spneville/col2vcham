@@ -462,10 +462,6 @@ contains
 !----------------------------------------------------------------------
     call eckart_transmat(xcoo0B,iteigB)
 
-    ! TEMPORARY: only translate
-    !return
-    ! TEMPORARY: only translate
-    
 !----------------------------------------------------------------------
 ! Take the +/- combinations of the x-, y- and z-directions that puts
 ! the rotated xcoo0A into maximum coincidence with xcoo0B
@@ -544,11 +540,6 @@ contains
        enddo
     enddo
 
-
-    ! TEMPORARY: only translate
-    !return
-    ! TEMPORARY: only translate
-    
 !-----------------------------------------------------------------------
 ! Calculate the moment of inertia tensor
 !-----------------------------------------------------------------------

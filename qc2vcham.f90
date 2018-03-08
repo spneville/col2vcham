@@ -33,10 +33,17 @@ program qc2vcham
   call qctype
 
 !----------------------------------------------------------------------
-! Determine the system dimensions
+! Determine the system dimensions from the quantum chemistry output
+! files
 !----------------------------------------------------------------------
   call getdim
 
+!----------------------------------------------------------------------
+! Reset nsta if the requested no. states is less than the number in
+! the quantum chemistry calculation
+!----------------------------------------------------------------------
+  if (smax.lt.nsta) nsta=smax
+  
 !----------------------------------------------------------------------
 ! Allocate arrays
 !----------------------------------------------------------------------
@@ -171,6 +178,9 @@ contains
     ! Approximate lambda calculation
     laprxlambda=.false.
 
+    ! No. states to consider
+    smax=999
+    
 !----------------------------------------------------------------------
 ! If no arguments have been given, print the input options to the
 ! screen and then quit
@@ -279,6 +289,10 @@ contains
        n=n+1
        call getarg(n,string2)
        read(string2,*) I0
+    else if (string1.eq.'-smax') then
+       n=n+1
+       call getarg(n,string2)
+       read(string2,*) smax
     else
        errmsg='Unknown keyword: '//trim(string1)
        call error_control
@@ -394,6 +408,14 @@ contains
              lambdafile(nlambdafiles)=keyword(1)
              goto 20
           endif
+
+       else if (keyword(i).eq.'smax') then
+          if (keyword(i+1).eq.'=') then
+             i=i+2
+             read(keyword(i),*) smax
+          else
+             goto 100
+          endif
           
        else
           ! Exit if the keyword is not recognised
@@ -480,7 +502,7 @@ contains
     write(6,'(/,25a)') ('-',i=1,25)
     write(6,'(a)') 'Usage'
     write(6,'(25a)') ('-',i=1,25)
-    write(6,'(a)') 'qcvcham -f -d (-hml -au)'
+    write(6,'(a)') 'qcvcham -f -d (-hml -au -smax)'
     
     ! Options
     write(6,'(/,25a)') ('-',i=1,25)
@@ -500,10 +522,12 @@ contains
          'The peak intensity of the pulse is I0 (W/cm^2)'
     write(6,'(a)')     '-au                    : &
          The MCTDH operator file is the be written in atomic units'
-    
+    write(6,'(a)')     '-smax N                : &
+         Only include the first N states in the LVC Hamiltonian'
+
     write(6,'(/)')
 
-    STOP
+    stop
     
     return
     

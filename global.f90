@@ -15,7 +15,8 @@ module global
   logical                                       :: outau,inpfile
 
   ! System information
-  integer                                       :: natm,ncoo,nmodes,nsta
+  integer                                       :: natm,ncoo,nmodes,&
+                                                   nsta,smax
   integer, dimension(:), allocatable            :: atnum
   real(d), dimension(:), allocatable            :: mass,xcoo0
   character(len=2), dimension(:), allocatable   :: atlbl
