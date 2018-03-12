@@ -449,39 +449,6 @@ contains
 
 !######################################################################
 
-!  function nlambdafiles(filename) result(n)
-!
-!    use channels
-!    use constants
-!    
-!    implicit none
-!
-!    integer            :: n,i
-!    character(len=*)   :: filename
-!    character(len=120) :: string
-!
-!!----------------------------------------------------------------------
-!! Determine the no. files
-!!----------------------------------------------------------------------  
-!5   read(iin,'(a)') string
-!    if (index(string,'end-lambda_files').eq.0) then
-!       n=n+1
-!       goto 5
-!    endif
-!
-!!----------------------------------------------------------------------
-!! Rewind back to the original postion in the input file
-!!----------------------------------------------------------------------
-!    do i=1,n+1
-!       backspace(iin)
-!    enddo
-!
-!    return
-!    
-!  end function nlambdafiles
-  
-!######################################################################
-
   subroutine wrhelp
 
     implicit none
@@ -701,8 +668,7 @@ contains
     implicit none
 
     integer            :: unit,s,s1,s2,m
-    real(d), parameter :: thrsh=1e-5
-
+    real(d), parameter :: thrsh=5e-4
 !----------------------------------------------------------------------
 ! Open the vchfit guess file
 !----------------------------------------------------------------------
@@ -756,7 +722,7 @@ contains
 
     integer                        :: unit,m,s,s1,s2,i,j,k,c,nl,&
                                       ncurr,fel
-    real(d), parameter             :: thrsh=1e-5
+    real(d), parameter             :: thrsh=5e-4
     character(len=2)               :: am,as,as1,as2,afel,aft
     character(len=5)               :: aunit
     character(len=90)              :: string

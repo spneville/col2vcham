@@ -1750,6 +1750,11 @@ contains
 !-----------------------------------------------------------------------
     nmcoo=matrix(1:ncoo,1:nmodes)
 
+!-----------------------------------------------------------------------
+! Gaussian flags imaginary frequencies using a minus sign - remove these
+!-----------------------------------------------------------------------
+    freq=abs(freq)
+    
     return
 
 900 continue
