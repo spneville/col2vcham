@@ -133,7 +133,6 @@ contains
     lgrad=.false.
     lnact=.false.
 
-
     return
 
   end subroutine initialise
@@ -180,6 +179,9 @@ contains
 
     ! No. states to consider
     smax=999
+
+    ! Deuteration
+    ldeuterate=.false.
     
 !----------------------------------------------------------------------
 ! If no arguments have been given, print the input options to the
@@ -293,6 +295,8 @@ contains
        n=n+1
        call getarg(n,string2)
        read(string2,*) smax
+    else if (string1.eq.'-deuterate') then
+       ldeuterate=.true.
     else
        errmsg='Unknown keyword: '//trim(string1)
        call error_control
@@ -416,6 +420,9 @@ contains
           else
              goto 100
           endif
+
+       else if (keyword(i).eq.'deuterate') then
+          ldeuterate=.true.
           
        else
           ! Exit if the keyword is not recognised
@@ -469,7 +476,7 @@ contains
     write(6,'(/,25a)') ('-',i=1,25)
     write(6,'(a)') 'Usage'
     write(6,'(25a)') ('-',i=1,25)
-    write(6,'(a)') 'qcvcham -f -d (-hml -au -smax)'
+    write(6,'(a)') 'qcvcham -f -d (-hml -au -smax -deuterate)'
     
     ! Options
     write(6,'(/,25a)') ('-',i=1,25)
@@ -492,6 +499,9 @@ contains
     write(6,'(a)')     '-smax N                : &
          Only include the first N states in the LVC Hamiltonian'
 
+    write(6,'(a)')     '-deuterate             : &
+         Replace hydrogen atoms with deuterium atoms'
+    
     write(6,'(/)')
 
     stop

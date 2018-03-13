@@ -905,6 +905,22 @@ contains
     call getxcoo0
 
 !----------------------------------------------------------------------
+! Deuteration: we can only do this if we are reading in the Hessian
+! to mass-weight and diagonalise, not if we are reading the normal
+! modes directly from file
+!----------------------------------------------------------------------
+    if (ldeuterate) then
+       if (freqtyp.eq.1) then
+          ! G98: Exit as normal modes read directly from file
+          errmsg='Deuteration is not compatible with G98 frequency &
+               calculations'
+          call error_control
+       else
+          call deuterate
+       endif
+    endif
+    
+!----------------------------------------------------------------------
 ! Read the normal modes, frequencies and symmetry labels
 !----------------------------------------------------------------------
     call getmodes
@@ -1263,7 +1279,7 @@ contains
     implicit none
 
     real(d), dimension(ncoo) :: xcoo
-    
+
 !----------------------------------------------------------------------
 ! Initialisation
 !----------------------------------------------------------------------
@@ -1288,7 +1304,7 @@ contains
 ! Fill in the xcoo0 array
 !----------------------------------------------------------------------
     xcoo0=xcoo
-    
+
     return
 
   end subroutine getxcoo0
@@ -1448,6 +1464,7 @@ contains
     do i=1,natm
        read(unit,*) atlbl(i),(xcoo(j), j=i*3-2,i*3)
        mass(i*3-2:i*3)=lbl2mass(atlbl(i))
+       atnum(i)=lbl2num(atlbl(i))
     enddo
 
     ! Convert to Bohr
@@ -1567,7 +1584,7 @@ contains
     return
 
   end function num2mass
-
+  
 !######################################################################
   
   function lbl2mass(lbl) result(mass)
@@ -1597,6 +1614,35 @@ contains
 
   end function lbl2mass
 
+!######################################################################
+  
+  function lbl2num(lbl) result(num)
+
+    use constants
+    use iomod
+    
+    implicit none
+    
+    integer          :: num
+    character(len=*) :: lbl
+
+    if (lbl.eq.'H') then
+       num=1
+    else if (lbl.eq.'C') then
+       num=6
+    else if (lbl.eq.'N') then
+       num=7
+    else if (lbl.eq.'O') then
+       num=8
+    else
+       errmsg='The atom type '//trim(lbl)//' is not supported.'&
+            //' See function lbl2num'
+    endif
+    
+    return
+    
+  end function lbl2num
+    
 !######################################################################
 
   subroutine getmodes
@@ -1848,30 +1894,37 @@ contains
 
 !----------------------------------------------------------------------
 ! Consistency check: read the CFOUR log file frequencies and make sure
-! that our frequencies match
+! that our frequencies match.
+!
+! Note that this check only makes sense if we are not deuterating the
+! molecule
 !----------------------------------------------------------------------    
-    call freeunit(unit)
-    open(unit,file=trim(freqfile)//'/cfour.log')
-
-5   read(unit,'(a)',end=888) string
-    if (index(string,'rotational projection').eq.0) goto 5
-
-    do i=1,7
-       read(unit,*)
-    enddo
+    if (.not.ldeuterate) then
        
-    do i=1,nmodes
-       read(unit,'(24x,F10.4)') cffreq(i)
-       if (abs(cffreq(i)-freq(i)/invcm2ev).gt.1.0d0) then
-          errmsg='Mismatch between calculated frequencies:'
-          write(errmsg(len_trim(errmsg):),'(2(x,F10.4))') &
-               cffreq(i),freq(i)/invcm2ev
-          call error_control
-       endif
-    enddo
+       call freeunit(unit)
+       open(unit,file=trim(freqfile)//'/cfour.log')
+       
+5      read(unit,'(a)',end=888) string
+       if (index(string,'rotational projection').eq.0) goto 5
+       
+       do i=1,7
+          read(unit,*)
+       enddo
+       
+       do i=1,nmodes
+          read(unit,'(24x,F10.4)') cffreq(i)
+          if (abs(cffreq(i)-freq(i)/invcm2ev).gt.1.0d0) then
+             errmsg='Mismatch between calculated frequencies:'
+             write(errmsg(len_trim(errmsg):),'(2(x,F10.4))') &
+                  cffreq(i),freq(i)/invcm2ev
+             call error_control
+          endif
+       enddo
+       
+       close(unit)
 
-    close(unit)
-
+    endif
+       
 !----------------------------------------------------------------------
 ! Read the symmetry labels from the CFOUR log file
 !----------------------------------------------------------------------
@@ -2257,6 +2310,29 @@ contains
   end subroutine nm2xmat
 
 !######################################################################
+! deuterate: changes the masses of any hydrogen atoms to the mass of
+!            of the deuterium atom
+!######################################################################
+
+  subroutine deuterate
+
+    use constants
+    use global
+    use iomod
+    
+    implicit none
+
+    integer :: i
+
+    do i=1,natm
+       if (atnum(i).eq.1) mass(i*3-2:i*3)=2.01410177811d0
+    enddo
+
+    return
+    
+  end subroutine deuterate
+    
+!######################################################################
 ! getnatm_freqfile: Determines the no. atoms, natm, from a frequency
 !                   file/directory
 !######################################################################
@@ -2406,7 +2482,7 @@ contains
     return
     
   end subroutine getnatm_freqfile_hessian
-  
+
 !######################################################################
 
 end module ioqc

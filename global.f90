@@ -20,6 +20,7 @@ module global
   integer, dimension(:), allocatable            :: atnum
   real(d), dimension(:), allocatable            :: mass,xcoo0
   character(len=2), dimension(:), allocatable   :: atlbl
+  logical                                       :: ldeuterate
 
   ! Energies, gradients, NACTs and 
   ! dipole matrix elements

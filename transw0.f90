@@ -127,6 +127,9 @@ contains
     freqfileA=''
     freqfileB=''
 
+    ! Deuteration
+    ldeuterate=.false.
+    
 !----------------------------------------------------------------------
 ! Read the command line arguments
 !----------------------------------------------------------------------
@@ -142,6 +145,8 @@ contains
     else if (string1.eq.'-fb'.or.string1.eq.'-fB') then
        n=n+1
        call getarg(n,freqfileB)
+    else if (string1.eq.'-deuterate') then
+       ldeuterate=.true.
     else
        errmsg='Unknown keyword: '//trim(string1)
        call error_control
