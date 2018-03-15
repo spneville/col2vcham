@@ -28,6 +28,12 @@ program nadvibs2mctdh
   call rdnadvibsinp
 
 !----------------------------------------------------------------------
+! Re-order the parameters s.t. the mode indices are ordered in terms
+! of increasing frequency
+!----------------------------------------------------------------------
+  call reorderpar
+ 
+!----------------------------------------------------------------------
 ! Write the MCTDH operator file
 !----------------------------------------------------------------------
   call wroper
@@ -372,6 +378,71 @@ contains
     
   end subroutine rdnadvibsinp
 
+!######################################################################
+
+  subroutine reorderpar
+
+    use constants
+    use utils
+    use n2m_global
+    
+    implicit none
+
+    integer                                     :: m,m1,m2,s,s1,s2
+    integer, dimension(nmodes)                  :: indx
+    real(d), dimension(nmodes)                  :: freq1
+    real(d), dimension(nmodes,nsta)             :: kappa1
+    real(d), dimension(nmodes,nsta,nsta)        :: lambda1
+    real(d), dimension(nmodes,nmodes,nsta)      :: gamma1
+    real(d), dimension(nmodes,nmodes,nsta,nsta) :: mu1
+    
+!----------------------------------------------------------------------
+! Get the list of mode indices in order of increasing frequency
+!----------------------------------------------------------------------
+    call dsortindxa1('A',nmodes,freq,indx)
+
+!----------------------------------------------------------------------
+! Reorder the parameters so that the mode indices are in order of
+! increasing frequency
+!----------------------------------------------------------------------
+    ! Frequencies
+    do m=1,nmodes
+       freq1(m)=freq(indx(m))
+    enddo
+    freq=freq1
+
+    ! 1st-order intrastate coupling constants
+    do m=1,nmodes
+       kappa1(m,:)=kappa(indx(m),:)
+    enddo
+    kappa=kappa1
+
+    ! 1st-order interstate coupling constants
+    do m=1,nmodes
+       lambda1(m,:,:)=lambda(indx(m),:,:)
+    enddo
+    lambda=lambda1
+
+    ! 2nd-order intrastate coupling constants
+    do m1=1,nmodes
+       do m2=1,nmodes
+          gamma1(m1,m2,:)=gamma(indx(m1),indx(m2),:)
+       enddo
+    enddo
+    gamma=gamma1
+
+    ! 2nd-order interstate coupling constants
+    do m1=1,nmodes
+       do m2=1,nmodes
+          mu1(m1,m2,:,:)=mu(indx(m1),indx(m2),:,:)
+       enddo
+    enddo
+    mu=mu1
+    
+    return
+    
+  end subroutine reorderpar
+    
 !######################################################################
 
   subroutine wroper
