@@ -751,6 +751,8 @@ contains
           enddo
        enddo
     enddo
+
+    write(unit,'(/,a)') 'end-hamiltonian-section'
     
 !----------------------------------------------------------------------
 ! End line

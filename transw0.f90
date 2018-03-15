@@ -802,7 +802,7 @@ contains
     write(ilog,'(50a)') ('*',i=1,50)
     
 !----------------------------------------------------------------------
-! First-order terms
+! First-order coefficients
 !----------------------------------------------------------------------
     write(ilog,'(/,a)') '# 1st-order transformed zeroth-order &
          potential terms'
@@ -814,7 +814,7 @@ contains
     enddo
 
 !----------------------------------------------------------------------
-! Second-order terms
+! Second-order coefficients
 !----------------------------------------------------------------------
     write(ilog,'(/,a)') '# 2nd-order transformed zeroth-order &
          potential terms'
@@ -822,22 +822,14 @@ contains
     ! Loop over the unique pairs of modes
     do m1=1,nmodes
        do m2=m1,nmodes
-
-          ! Take account of the fact that we will only write the
-          ! unique pairs to the operator file
-          if (m1.eq.m2) then
-             par=gammaB(m1,m2)
-          else
-             par=2.0d0*gammaB(m1,m2)
-          endif
           
-          if (abs(par).lt.thrsh) cycle
+          if (abs(gammaB(m1,m2)).lt.thrsh) cycle
 
           write(am1,'(i2)') m1
           write(am2,'(i2)') m2
           write(ilog,'(a,F9.6,a)') 'gammaB'//'_'&
                //trim(adjustl(am1))//'_'//trim(adjustl(am2))&
-               //' = ',par,' , ev'
+               //' = ',gammaB(m1,m2),' , ev'
           
        enddo
     enddo
