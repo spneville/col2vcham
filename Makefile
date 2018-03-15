@@ -39,6 +39,14 @@ OBJ_TRANSW0 = constants.o \
 	ioqc.o \
 	transw0.o
 
+OBJ_NADVIBS2MCTDH = constants.o \
+	global.o \
+	n2m_global.o \
+	channels.o \
+	iomod.o \
+	utils.o \
+	nadvibs2mctdh.o
+
 qc2vcham: $(OBJ)
 	$(F90) $(F90OPTS) $(OBJ) $(LIBS) -o qc2vcham
 	rm -f *.o *~ *.mod 2>/dev/null
@@ -49,6 +57,10 @@ pltlvc: $(OBJ_PLTLVC)
 
 transw0: $(OBJ_TRANSW0)
 	$(F90) $(F90OPTS) $(OBJ_TRANSW0) $(LIBS) -o transw0
+	rm -f *.o *~ *.mod 2>/dev/null
+
+nadvibs2mctdh: $(OBJ_NADVIBS2MCTDH)
+	$(F90) $(F90OPTS) $(OBJ_NADVIBS2MCTDH) $(LIBS) -o nadvibs2mctdh
 	rm -f *.o *~ *.mod 2>/dev/null
 
 %.o: %.f90
