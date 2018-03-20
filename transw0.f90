@@ -789,10 +789,10 @@ contains
 
     implicit none
 
-    integer            :: i,m1,m2
+    integer            :: i,m,m1,m2
     real(d), parameter :: thrsh=1e-5
     real(d)            :: par
-    character(len=2)   :: am1,am2
+    character(len=2)   :: am,am1,am2
 
 !----------------------------------------------------------------------
 ! Section header
@@ -805,35 +805,33 @@ contains
 ! First-order coefficients
 !----------------------------------------------------------------------
     write(ilog,'(/,a)') '# 1st-order transformed zeroth-order &
-         potential terms'
-    do m1=1,nmodes
-       if (abs(kappaB(m1)).lt.thrsh) cycle
-       write(am1,'(i2)') m1
-       write(ilog,'(a,F9.6,a)') 'kappaB'//'_'//trim(adjustl(am1))// &
-            ' = ',kappaB(m1),' , ev'
+         coefficients'
+
+    do m=1,nmodes
+       if (abs(kappaB(m)).lt.thrsh) cycle
+       write(am,'(i2)') m
+       write(ilog,'(a,F9.6,a)') 'kappaB'//'_'//trim(adjustl(am))// &
+            ' = ',kappaB(m),' , ev'
     enddo
 
 !----------------------------------------------------------------------
 ! Second-order coefficients
 !----------------------------------------------------------------------
     write(ilog,'(/,a)') '# 2nd-order transformed zeroth-order &
-         potential terms'
+         coefficients'
 
     ! Loop over the unique pairs of modes
     do m1=1,nmodes
        do m2=m1,nmodes
-          
           if (abs(gammaB(m1,m2)).lt.thrsh) cycle
-
           write(am1,'(i2)') m1
           write(am2,'(i2)') m2
           write(ilog,'(a,F9.6,a)') 'gammaB'//'_'&
                //trim(adjustl(am1))//'_'//trim(adjustl(am2))&
                //' = ',gammaB(m1,m2),' , ev'
-          
        enddo
     enddo
-          
+
     return
     
   end subroutine wrtransw0

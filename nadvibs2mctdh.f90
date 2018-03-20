@@ -37,6 +37,12 @@ program nadvibs2mctdh
 ! Write the MCTDH operator file
 !----------------------------------------------------------------------
   call wroper
+
+!----------------------------------------------------------------------
+! Write the frequency-weighted first-order coefficients to the log
+! file for inspection
+!----------------------------------------------------------------------
+  call wrlvcinfo
   
 !----------------------------------------------------------------------
 ! Finalisation
@@ -301,14 +307,10 @@ contains
              read(unit,*)
              read(unit,*) (tmp1(m),m=1,nmodes)
              if (i.eq.j) then
-                do m=1,nmodes
-                   kappa(m,i)=tmp1(m)
-                enddo
+                kappa(:,i)=tmp1(:)
              else
-                do m=1,nmodes
-                   lambda(m,i,j)=tmp1(m)
-                   lambda(m,j,i)=tmp1(m)
-                enddo
+                lambda(:,i,j)=tmp1(:)
+                lambda(:,j,i)=tmp1(:)
              endif
           endif
 
@@ -766,6 +768,84 @@ contains
     return
     
   end subroutine wroper
+
+!######################################################################
+
+  subroutine wrlvcinfo
+
+    use constants
+    use channels
+    use n2m_global
+    use utils
+
+    implicit none
+
+    integer                         :: m,s,s1,s2,i
+    real(d), parameter              :: thrsh=1e-3
+    real(d), dimension(nmodes,nsta) :: maxpar
+    real(d)                         :: fwp
+    integer, dimension(nmodes)      :: indx
+
+    write(ilog,'(/,50a)') ('*', i=1,50)
+    write(ilog,'(11x,a)') 'LVC Hamiltonian Information'
+    write(ilog,'(50a)') ('*', i=1,50)
+
+    maxpar=0.0d0
+
+!----------------------------------------------------------------------
+! Frequency-weighted 1st-order interstate coupling terms (kappa)
+!----------------------------------------------------------------------
+    write(ilog,'(/,a)') '# Frequency-weighted 1st-order interstate'
+    write(ilog,'(a,/)') '# coupling terms (kappa)'
+    do m=1,nmodes
+       do s=1,nsta
+          fwp=kappa(m,s)/freq(m)
+          if (abs(fwp).lt.thrsh) cycle
+          write(ilog,'(a5,2(x,i2),x,a2,F10.6)') &
+               'kappa',m,s,'= ',fwp
+          if (abs(fwp).ge.maxpar(m,s)) maxpar(m,s)=abs(fwp)
+       enddo
+    enddo
+
+!----------------------------------------------------------------------
+! Frequency-weighted 1st-order interstate coupling terms (kappa)
+!----------------------------------------------------------------------
+    write(ilog,'(/,a)') '# Frequency-weighted 1st-order intrastate'
+    write(ilog,'(a,/)') '# coupling terms (lambda)'
+    do m=1,nmodes
+       do s1=1,nsta-1
+          do s2=s1+1,nsta
+             fwp=lambda(m,s1,s2)/freq(m)
+             if (abs(fwp).lt.thrsh) cycle
+             write(ilog,'(a6,3(x,i2),x,a2,F10.6)') &
+                  'lambda',m,s1,s2,'= ',fwp
+             if (abs(fwp).ge.maxpar(m,s1)) maxpar(m,s1)=abs(fwp)
+          enddo
+       enddo
+    enddo
+
+!----------------------------------------------------------------------    
+! Estimation of the relative spectroscopic importance of the normal
+! modes
+!----------------------------------------------------------------------
+    write(ilog,'(/,a)') '# Estimation of the relative spectroscopic &
+         importance'
+    write(ilog,'(a)') '# of the normal modes'
+    write(ilog,'(57a)') ('-', i=1,57)
+    write(ilog,'(2x,3(a,5x))') 'State','Mode',&
+         'Max. freq.-weighted parameter value'
+    write(ilog,'(57a)') ('-', i=1,57)
+    do s=1,nsta
+       call dsortindxa1('D',nmodes,maxpar(:,s),indx)
+       do m=1,nmodes
+          write(ilog,'(i3,7x,i3,7x,F10.6)') s,indx(m),maxpar(indx(m),s)
+       enddo
+       write(ilog,*)
+    enddo
+    
+    return
+    
+  end subroutine wrlvcinfo
     
 !######################################################################
   

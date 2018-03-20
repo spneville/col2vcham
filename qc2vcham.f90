@@ -520,22 +520,23 @@ contains
 
     ! Vertical excitation energies
     allocate(ener(nsta))
-
+    ener=0.0d0
+    
     ! Energy gradients in Cartesians
     allocate(grad(ncoo,nsta))
     grad=0.0d0
 
     ! NACTs in Cartesians
     allocate(nact(ncoo,nsta,nsta))
-    grad=0.0d0
+    nact=0.0d0
 
     ! Energy gradients in normal modes
     allocate(kappa(nmodes,nsta))
-    grad=0.0d0
+    kappa=0.0d0
 
     ! NACTs in normal modes
     allocate(lambda(nmodes,nsta,nsta))
-    grad=0.0d0
+    lambda=0.0d0
 
     ! Atomic masses
     allocate(mass(ncoo))
