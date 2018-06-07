@@ -42,13 +42,17 @@ contains
 
     integer            :: unit,n
     character(len=150) :: filename,string
+    character(len=1)   :: adrt
 
 !----------------------------------------------------------------------
-! Determine the no. states from ciudgsm.drt1.sp
+! Determine the no. states from ciudgsm.drtIDRT.sp
 !----------------------------------------------------------------------
     ! Open file
     call freeunit(unit)
-    filename=trim(qcfile(1))//'/LISTINGS/ciudgsm.drt1.sp'
+    !filename=trim(qcfile(1))//'/LISTINGS/ciudgsm.drt1.sp'
+    write(adrt,'(i1)') idrt
+    filename=trim(qcfile(1))//'/LISTINGS/ciudgsm.drt'//adrt//'.sp'
+
     open(unit,file=filename,form='formatted',status='old')
 
     ! Read to the MRCI energy section
@@ -92,8 +96,12 @@ contains
 
     ! No. normal modes
     ! N.B. for now we assume that the molecule is not linear...
-    nmodes=ncoo-6
-
+    if (freqtyp.eq.4) then
+       nmodes=ncoo
+    else
+       nmodes=ncoo-6
+    endif
+    
     ! Close file
     close(unit)
 
@@ -150,8 +158,12 @@ contains
 
     ! No. normal modes
     ! N.B. for now we assume that the molecule is not linear...
-    nmodes=ncoo-6
-    
+    if (freqtyp.eq.4) then
+       nmodes=ncoo
+    else
+       nmodes=ncoo-6
+    endif
+       
 !----------------------------------------------------------------------
 ! Determine the no. states (including the ground state)
 !----------------------------------------------------------------------
@@ -198,13 +210,16 @@ contains
     integer                  :: n
     real(d), dimension(nsta) :: etmp
     character(len=150)       :: filename
+    character(len=1)         :: adrt
 
 !----------------------------------------------------------------------
 ! Read the energies of the electronic states in au
 !----------------------------------------------------------------------
     if (qctyp.eq.4) then
        ! Columbus
-       filename=trim(qcfile(1))//'/LISTINGS/ciudgsm.drt1.sp'
+       !filename=trim(qcfile(1))//'/LISTINGS/ciudgsm.drt1.sp'
+       write(adrt,'(i1)') idrt
+       filename=trim(qcfile(1))//'/LISTINGS/ciudgsm.drt'//adrt//'.sp'
        call rdener_columbus(etmp,filename)
     else if (qctyp.eq.5) then
        ! Turbomole, ricc2
@@ -238,7 +253,7 @@ contains
     character(len=*)         :: filename
     
 !----------------------------------------------------------------------
-! Read the Davidson corrected MRCI energies from ciudgsm.drt1.sp
+! Read the Davidson corrected MRCI energies from ciudgsm.drtIDRT.sp
 !----------------------------------------------------------------------
     ! Open file
     call freeunit(unit)
@@ -361,19 +376,25 @@ contains
     integer            :: i,j,k,unit
     character(len=150) :: filename
     character(len=2)   :: asta
+    character(len=1)   :: adrt
 
 !----------------------------------------------------------------------
 ! Read the energy gradients in terms of the Cartesian coordinates
 !----------------------------------------------------------------------
     call freeunit(unit)
 
+    ! DRT no.
+    write(adrt,'(i1)') idrt
+    
     ! Loop over states
     do i=1,nsta
 
        ! Open the gradient file
        write(asta,'(i2)') i
-       filename=trim(qcfile(1))//'/GRADIENTS/cartgrd.drt1.state'&
-            //trim(adjustl(asta))//'.sp'
+       !filename=trim(qcfile(1))//'/GRADIENTS/cartgrd.drt1.state'&
+       !     //trim(adjustl(asta))//'.sp'
+       filename=trim(qcfile(1))//'/GRADIENTS/cartgrd.drt'//adrt//&
+            '.state'//trim(adjustl(asta))//'.sp'
        open(unit,file=filename,form='formatted',status='old')
 
        ! Read the gradient file
@@ -517,6 +538,7 @@ contains
     integer            :: s1,s2,i,j,unit
     character(len=150) :: filename
     character(len=2)   :: asta1,asta2
+    character(len=1)   :: adrt
 
 !----------------------------------------------------------------------
 ! Read the NACTs (multiplied by the energy difference!) in terms of 
@@ -524,6 +546,9 @@ contains
 !----------------------------------------------------------------------
     call freeunit(unit)
 
+    ! DRT no.
+    write(adrt,'(i1)') idrt
+    
     ! Loop unique pairs of states
     do s1=1,nsta-1
        do s2=s1+1,nsta
@@ -531,9 +556,12 @@ contains
           ! Open the NACT file
           write(asta1,'(i2)') s1
           write(asta2,'(i2)') s2
-          filename=trim(qcfile(1))//'/GRADIENTS/cartgrd.nad.drt1.state'&
-            //trim(adjustl(asta1))//'.drt1.state'&
-            //trim(adjustl(asta2))//'.sp'
+          !filename=trim(qcfile(1))//'/GRADIENTS/cartgrd.nad.drt1.state'&
+          !  //trim(adjustl(asta1))//'.drt1.state'&
+          !  //trim(adjustl(asta2))//'.sp'
+          filename=trim(qcfile(1))//'/GRADIENTS/cartgrd.nad.drt'//adrt//&
+               '.state'//trim(adjustl(asta1))//'.drt'//adrt//'.state'&
+               //trim(adjustl(asta2))//'.sp'
           open(unit,file=filename,form='formatted',status='old')
 
           ! Read the NACT file
@@ -584,19 +612,25 @@ contains
     integer            :: s,s1,s2,i,j,unit
     character(len=150) :: filename,string
     character(len=2)   :: asta1,asta2
+    character(len=1)   :: adrt
 
 !----------------------------------------------------------------------
 ! Read the on-diagonal elements of the dipole matrix
 !----------------------------------------------------------------------
     call freeunit(unit)
 
+    ! DRT no.
+    write(adrt,'(i1)') idrt
+    
     ! Loop over states
     do s=1,nsta
        
        ! Open the propls file
        write(asta1,'(i2)') s
-       filename=trim(qcfile(1))//'/LISTINGS/propls.ci.drt1.state'&
-            //trim(adjustl(asta1))//'.sp'
+       !filename=trim(qcfile(1))//'/LISTINGS/propls.ci.drt1.state'&
+       !     //trim(adjustl(asta1))//'.sp'
+       filename=trim(qcfile(1))//'/LISTINGS/propls.ci.drt'//adrt//&
+            '.state'//trim(adjustl(asta1))//'.sp'
        open(unit,file=filename,form='formatted',status='old')
        
        ! Read the dipole moment
@@ -619,12 +653,18 @@ contains
     do s1=1,nsta-1
        do s2=s1+1,nsta
 
+          ! DRT no.
+          write(adrt,'(i1)') idrt
+          
           ! Open the trncils file
           write(asta1,'(i2)') s1
           write(asta2,'(i2)') s2
-          filename=trim(qcfile(1))//'/LISTINGS/trncils.drt1.state'&
-            //trim(adjustl(asta1))//'.drt1.state'&
-            //trim(adjustl(asta2))
+          !filename=trim(qcfile(1))//'/LISTINGS/trncils.drt1.state'&
+          !  //trim(adjustl(asta1))//'.drt1.state'&
+          !  //trim(adjustl(asta2))
+          filename=trim(qcfile(1))//'/LISTINGS/trncils.drt'//adrt//&
+               '.state'//trim(adjustl(asta1))//'.drt'//adrt//'.state'&
+               //trim(adjustl(asta2))
           open(unit,file=filename,form='formatted',status='old')
 
           ! Read the transition diole moment
@@ -875,10 +915,12 @@ contains
     real(d), dimension(nsta) :: e
     character(len=*)         :: filename
     character(len=250)       :: aciudgsm
+    character(len=1)         :: adrt
     
     if (ityp.eq.4) then
        ! Columbus
-       aciudgsm=trim(filename)//'/LISTINGS/ciudgsm.drt1.sp'
+       write(adrt,'(i1)') idrt
+       aciudgsm=trim(filename)//'/LISTINGS/ciudgsm.drt'//adrt//'.sp'
        call rdener_columbus(e,aciudgsm)
     else if (ityp.eq.5) then
        ! Turbomole, ricc2
@@ -915,6 +957,12 @@ contains
           errmsg='Deuteration is not compatible with G98 frequency &
                calculations'
           call error_control
+       else if (freqtyp.eq.4) then
+          ! Projection2: Exit as the projected normal modes are
+          ! directly read from file
+          errmsg='Deuteration is not compatible with Projection2 &
+               calculations'
+          call error_control
        else
           call deuterate
        endif
@@ -930,12 +978,13 @@ contains
   end subroutine rdfreqfile
 
 !######################################################################
-! freqtype: determines the quantum chemistry program used for the
-!           frequency calculation, and sets freqtyp accordingly:
+! freqtype: determines the program used for the frequency calculation,
+!           and sets freqtyp accordingly:
 !          
 !           freqtyp = 1 <-> G98
 !                     2 <-> CFOUR
 !                     3 <-> Hessian file
+!                     4 <-> Projection2 data file
 !######################################################################
   subroutine freqtype
 
@@ -967,6 +1016,9 @@ contains
     else if (ishessian(freqfile)) then
        ! Hessian
        freqtyp=3
+    else if (isprojection2(freqfile)) then
+       ! Projection2 data file
+       freqtyp=4
     endif
 
 !----------------------------------------------------------------------
@@ -1270,6 +1322,58 @@ contains
 
 !######################################################################
 
+  function isprojection2(filename) result(found)
+
+    use constants
+    use iomod
+
+    implicit none
+
+    integer            :: unit,ierr
+    character(len=*)   :: filename
+    character(len=120) :: header
+    logical            :: found
+
+!-----------------------------------------------------------------------
+! Open file
+!-----------------------------------------------------------------------
+    open(unit,file=filename,form='unformatted',status='old')
+
+!-----------------------------------------------------------------------
+! Attempt to read the file header
+!-----------------------------------------------------------------------
+    read(unit,iostat=ierr) header
+
+!-----------------------------------------------------------------------
+! If the read was unsuccessful, then we know that the file is not
+! a projection2 data file
+!-----------------------------------------------------------------------
+    if (ierr.ne.0) then
+       found=.false.
+       return
+    endif
+
+!-----------------------------------------------------------------------
+! If the read was successful, then check that the file header is
+! consistent with a projection2 file header
+!-----------------------------------------------------------------------
+    if (index(header,'Projection2').ne.0) then
+       found=.true.
+    else
+       found=.false.
+    endif
+
+!-----------------------------------------------------------------------
+! Close file
+!-----------------------------------------------------------------------
+    close(unit)
+    
+    return
+    
+  end function isprojection2
+    
+!######################################################################
+
   subroutine getxcoo0
 
     use constants
@@ -1298,6 +1402,9 @@ contains
     else if (freqtyp.eq.3) then
        ! Hessian
        call getxcoo_hessian(xcoo,freqfile)
+    else if (freqtyp.eq.4) then
+       ! Projection2 data file
+       call getxcoo_projection2(xcoo,freqfile)
     endif
 
 !----------------------------------------------------------------------
@@ -1479,6 +1586,65 @@ contains
 
   end subroutine getxcoo_hessian
 
+!######################################################################
+
+  subroutine getxcoo_projection2(xcoo,filename)
+
+    use constants
+    use iomod
+    use global
+    
+    implicit none
+
+    integer                  :: unit,idum,i
+    real(d), dimension(ncoo) :: xcoo
+    character(len=*)         :: filename
+    character(len=120)       :: header
+
+!-----------------------------------------------------------------------
+! Open file
+!-----------------------------------------------------------------------
+    open(unit,file=filename,form='unformatted',status='old')
+
+!-----------------------------------------------------------------------
+! Read the Cartesian coordinates: access is sequential, so we first
+! have to read past the header an no. Cartesian coordinates
+!-----------------------------------------------------------------------
+    ! Header
+    read(unit) header
+
+    ! No. coordinates
+    read(unit) idum
+
+    ! Cartesian coordinates (in Angstrom)
+    read(unit) xcoo
+
+    ! Convert to Bohr
+    xcoo=xcoo*ang2bohr
+
+!-----------------------------------------------------------------------
+! Read in the masses and atom labels
+!-----------------------------------------------------------------------
+    ! Masses
+    read(unit) mass
+    
+    ! Atom labels
+    read(unit) atlbl
+
+    ! Determine the atomic numbers from the atom labels
+    do i=1,natm
+       atnum(i)=lbl2num(atlbl(i))
+    enddo
+    
+!-----------------------------------------------------------------------
+! Close file
+!-----------------------------------------------------------------------
+    close(unit)
+    
+    return
+    
+  end subroutine getxcoo_projection2
+    
 !######################################################################
 
   subroutine getxcoo_ricc2(xcoo,filename)
@@ -1667,6 +1833,9 @@ contains
     else if (freqtyp.eq.3) then
        ! HESSIAN
        call getmodes_hessian
+    else if (freqtyp.eq.4) then
+       ! Projection2 data file
+       call getmodes_projection2
     endif
 
 !----------------------------------------------------------------------
@@ -2003,6 +2172,73 @@ contains
 
   end subroutine getmodes_hessian
 
+!######################################################################
+
+  subroutine getmodes_projection2
+
+    use constants
+    use iomod
+    use global
+    
+    implicit none
+
+    integer                           :: unit,idum,i
+    real(d), dimension(ncoo)          :: xdum,mdum
+    real(d), dimension(ncoo,ncoo)     :: sthess
+    character(len=120)                :: header
+    character(len=2), dimension(natm) :: ldum
+    
+!-----------------------------------------------------------------------
+! Open file
+!-----------------------------------------------------------------------
+    open(unit,file=freqfile,form='unformatted',status='old')
+
+!-----------------------------------------------------------------------
+! Read past the file header, no. coordinates, geometry, masses and
+! atom labels
+!-----------------------------------------------------------------------
+    ! Header
+    read(unit) header
+
+    ! No. coordinates
+    read(unit) idum
+
+    ! Reference geometry
+    read(unit) xdum
+
+    ! Masses
+    read(unit) mdum
+
+    ! Atom labels
+    read(unit) ldum
+
+!-----------------------------------------------------------------------
+! Read in the coordinate vectors (in terms of mass-weighted Cartesians)
+!-----------------------------------------------------------------------
+    ! Coordinate vectors
+    read(unit) nmcoo
+
+!-----------------------------------------------------------------------
+! Determine the 'frequencies' from the diagonal elements of the
+! similarity transformed Hessian
+!-----------------------------------------------------------------------
+    ! Similarity transformed Hessian
+    read(unit) sthess
+
+    ! 'Frequencies' in eV
+    do i=1,ncoo
+       freq(i)=sqrt(abs(sthess(i,i)))*0.6373641d0
+    enddo
+    
+!-----------------------------------------------------------------------
+! Close file
+!-----------------------------------------------------------------------
+    close(unit)
+    
+    return
+    
+  end subroutine getmodes_projection2
+    
 !######################################################################
 
   subroutine hess2nm(hess)
@@ -2356,6 +2592,11 @@ contains
     else if (freqtyp.eq.3) then
        ! Hessian file
        call getnatm_freqfile_hessian(freqfile)
+    else if (freqtyp.eq.4) then
+       ! Projection2 data file: not yet supported here
+       errmsg='You need to write the getnatm_freqfile_projection2 &
+            subroutine...'
+       call error_control
     endif
     
     return

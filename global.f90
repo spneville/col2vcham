@@ -8,7 +8,7 @@ module global
 
   ! I/O
   integer                                       :: freqtyp,qctyp,&
-                                                   nlambdafiles
+                                                   nlambdafiles,idrt
   character(len=120)                            :: freqfile
   character(len=120), dimension(50)             :: qcfile
   character(len=250), dimension(200)            :: lambdafile

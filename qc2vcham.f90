@@ -182,6 +182,9 @@ contains
 
     ! Deuteration
     ldeuterate=.false.
+
+    ! DRT no. to parse for a Columbus calculation
+    idrt=1
     
 !----------------------------------------------------------------------
 ! If no arguments have been given, print the input options to the
@@ -297,6 +300,10 @@ contains
        read(string2,*) smax
     else if (string1.eq.'-deuterate') then
        ldeuterate=.true.
+    else if (string1.eq.'-drt') then
+       n=n+1
+       call getarg(n,string2)
+       read(string2,*) idrt
     else
        errmsg='Unknown keyword: '//trim(string1)
        call error_control
@@ -423,6 +430,14 @@ contains
 
        else if (keyword(i).eq.'deuterate') then
           ldeuterate=.true.
+
+       else if (keyword(i).eq.'drt') then
+          if (keyword(i+1).eq.'=') then
+             i=i+2
+             read(keyword(i),*) idrt
+          else
+             goto 100
+          endif
           
        else
           ! Exit if the keyword is not recognised
@@ -476,7 +491,7 @@ contains
     write(6,'(/,25a)') ('-',i=1,25)
     write(6,'(a)') 'Usage'
     write(6,'(25a)') ('-',i=1,25)
-    write(6,'(a)') 'qcvcham -f -d (-hml -au -smax -deuterate)'
+    write(6,'(a)') 'qcvcham -f -d (-hml -au -smax -deuterate -drt)'
     
     ! Options
     write(6,'(/,25a)') ('-',i=1,25)
@@ -498,9 +513,13 @@ contains
          The MCTDH operator file is the be written in atomic units'
     write(6,'(a)')     '-smax N                : &
          Only include the first N states in the LVC Hamiltonian'
-
     write(6,'(a)')     '-deuterate             : &
          Replace hydrogen atoms with deuterium atoms'
+    write(6,'(a,/,25x,a)')     '-drt N                 : &
+         When parsing the output of a Columbus calculation, the &
+         results will be read for DRT number N',&
+         'The default value is N=1'
+    
     
     write(6,'(/)')
 

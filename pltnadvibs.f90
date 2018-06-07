@@ -1,5 +1,7 @@
 program pltnadvibs
 
+  use n2m_global
+  
   implicit none
 
 !----------------------------------------------------------------------
@@ -786,7 +788,7 @@ contains
           enddo
        enddo
     enddo
-       
+
     return
 
   end function potfunc

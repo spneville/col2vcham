@@ -229,8 +229,13 @@ contains
 ! N.B. We are assuming a non-linear molecule here...
 !----------------------------------------------------------------------
     ncoo=3*natm
-    nmodes=ncoo-6
-    
+
+    if (freqtyp.eq.4) then
+       nmodes=ncoo
+    else
+       nmodes=ncoo-6
+    endif
+
     return
     
   end subroutine set_dimensions
