@@ -23,6 +23,9 @@ contains
     else if (qctyp.eq.5) then
        ! Turbomole, ricc2
        call getdim_ricc2
+    else if (qctyp.eq.6) then
+       ! Molcas, RASSCF
+       call getdim_molcas_rasscf(qcfile(1))
     endif
     
     return
@@ -201,6 +204,91 @@ contains
 
 !######################################################################
 
+  subroutine getdim_molcas_rasscf(filename)
+
+    use constants
+    use channels
+    use iomod
+    use parsemod, only: lowercase
+    use global
+
+    implicit none
+
+    integer            :: unit
+    character(len=120) :: string
+    character(len=*)   :: filename
+
+!----------------------------------------------------------------------
+! Open the output file
+!----------------------------------------------------------------------
+    call freeunit(unit)
+    open(unit,file=filename,form='formatted',status='old')
+    
+!----------------------------------------------------------------------
+! Determine the number of states
+!----------------------------------------------------------------------
+    nsta=0
+5   read(unit,'(a)',end=10) string
+    call lowercase(string)
+    if (index(string,'rlxroot').ne.0) nsta=nsta+1
+    goto 5
+    
+10  continue
+
+    if (nsta.eq.0) then
+       errmsg='Error determining the no. states in '//trim(filename)
+       call error_control
+    endif
+
+!----------------------------------------------------------------------
+! Determine the no. vibrational degree of freedoms
+!----------------------------------------------------------------------
+    natm=0
+    ncoo=0
+    nmodes=0
+
+    ! Determine the no. atoms
+    rewind(unit)
+15  read(unit,'(a)',end=999) string
+    if (index(string,&
+         'Cartesian Coordinates / Bohr, Angstrom').eq.0) goto 15
+    read(unit,*)
+    read(unit,*)
+    read(unit,*)
+20  read(unit,'(a)',end=999) string
+    if (len(trim(string)).ne.0) then
+       natm=natm+1
+       goto 20
+    endif
+
+    ! No. Cartesian coordinates
+    ncoo=3*natm
+
+    ! No. normal modes
+    ! N.B. for now we assume that the molecule is not linear...
+    nmodes=ncoo-6
+    
+!----------------------------------------------------------------------
+! Close the output file
+!----------------------------------------------------------------------
+    close(unit)
+
+!----------------------------------------------------------------------
+! Output the system dimensions to the log file
+!----------------------------------------------------------------------
+    write(ilog,'(/,2x,a,2x,i2)') "No. states:",nsta
+    write(ilog,'(/,2x,a,2x,i2)') "No. atoms:",natm
+    
+    return
+
+999 continue
+    errmsg='Error parsing the Cartesian coordinates in '&
+         //trim(filename)
+    
+  end subroutine getdim_molcas_rasscf
+  
+!######################################################################
+
   subroutine rdener
 
     use global
@@ -224,6 +312,9 @@ contains
     else if (qctyp.eq.5) then
        ! Turbomole, ricc2
        call rdener_ricc2(etmp,qcfile(1))
+    else if (qctyp.eq.6) then
+       ! Molcas, RASSCF
+       call rdener_molcas_rasscf(etmp,qcfile(1))
     endif
 
 !----------------------------------------------------------------------
@@ -235,6 +326,8 @@ contains
     enddo
     ener(1)=0.0d0
 
+    return
+    
   end subroutine rdener
 
 !######################################################################
@@ -346,6 +439,55 @@ contains
   end subroutine rdener_ricc2
 
 !######################################################################
+  
+  subroutine rdener_molcas_rasscf(e,filename)
+
+    use constants
+    use iomod
+    use global
+
+    implicit none
+
+    integer                  :: unit,n
+    real(d), dimension(nsta) :: e
+    character(len=150)       :: string
+    character(len=*)         :: filename
+
+!----------------------------------------------------------------------
+! Open the output file
+!----------------------------------------------------------------------
+    call freeunit(unit)
+    open(unit,file=filename,form='formatted',status='old')
+
+!----------------------------------------------------------------------
+! Read the RASSCF energies
+!----------------------------------------------------------------------
+    n=0
+5   read(unit,'(a)',end=10) string
+    if (index(string,'RASSCF energy for state').ne.0) then
+       n=n+1
+       read(string,'(50x,F14.8)') e(n)
+       if (n.eq.nsta) goto 10
+    endif
+    goto 5
+    
+10  continue
+
+    if (n.ne.nsta) then
+       errmsg='Not all state energies found in '//trim(filename)
+       call error_control
+    endif
+    
+!----------------------------------------------------------------------
+! Close the output file
+!----------------------------------------------------------------------
+    close(unit)
+    
+    return    
+    
+  end subroutine rdener_molcas_rasscf
+    
+!######################################################################
 
   subroutine rdgrad
 
@@ -357,6 +499,9 @@ contains
     else if (qctyp.eq.5) then
        ! Turbomole, ricc2
        call rdgrad_ricc2
+    else if (qctyp.eq.6) then
+       ! Molcas, RASSCF
+       call rdgrad_molcas_rasscf(qcfile(1))
     endif
 
     return
@@ -507,6 +652,67 @@ contains
     call error_control
     
   end subroutine rdgrad_ricc2
+
+!######################################################################
+
+  subroutine rdgrad_molcas_rasscf(filename)
+
+    use constants
+    use global
+    use iomod
+    
+    implicit none
+
+    integer            :: unit,n,i,j
+    character(len=*)   :: filename
+    character(len=120) :: string
+    character(len=5)   :: atmp
+    
+!----------------------------------------------------------------------
+! Open the Molcas output file
+!----------------------------------------------------------------------
+    call freeunit(unit)
+    open(unit,file=filename,form='formatted',status='old')
+
+!----------------------------------------------------------------------    
+! Read in the gradients
+!----------------------------------------------------------------------
+    n=0
+    
+5   read(unit,'(a)',end=999) string
+
+    if (index(string,'Molecular gradients').ne.0) then
+
+       n=n+1
+
+       do i=1,7
+          read(unit,*)
+       enddo
+
+       do i=1,natm
+          read(unit,*) atmp,(grad(j,n),j=i*3-2,i*3)
+       enddo
+       
+       if (n.eq.nsta) goto 10
+
+    endif
+       
+    goto 5
+
+10  continue
+
+!----------------------------------------------------------------------
+! Close the Molcas output file
+!----------------------------------------------------------------------
+    close(unit)
+    
+    return
+
+999 continue
+    errmsg='Error parsing the gradients in '//trim(filename)
+    call error_control
+        
+  end subroutine rdgrad_molcas_rasscf
     
 !######################################################################
 
@@ -519,6 +725,9 @@ contains
     if (qctyp.eq.4) then
        ! Columbus
        call rdnact_columbus
+    else if (qctyp.eq.6) then
+       ! Molcas, RASSCF
+       call rdnact_molcas_rassscf(qcfile(1))
     endif
 
     return
@@ -570,7 +779,7 @@ contains
           enddo
 
           ! Fill in the lower triangle
-          nact(:,s2,s1)=nact(:,s1,s2)
+          nact(:,s2,s1)=-nact(:,s1,s2)
 
           ! Close the NACT file
           close(unit)
@@ -582,6 +791,98 @@ contains
 
   end subroutine rdnact_columbus
 
+!######################################################################
+
+  subroutine rdnact_molcas_rassscf(filename)
+
+    use constants
+    use global
+    use iomod
+    
+    implicit none
+
+    integer                       :: unit,i,j,n,s1,s2
+    integer, dimension(2,nsta**2) :: ipair
+    real*8, dimension(ncoo)       :: nact_ci,nact_csf
+    character(len=*)              :: filename
+    character(len=120)            :: string
+    character(len=5)              :: atmp
+    
+!----------------------------------------------------------------------
+! Open the Molcas output file
+!----------------------------------------------------------------------
+    call freeunit(unit)
+    open(unit,file=filename,form='formatted',status='old')
+
+!----------------------------------------------------------------------
+! Determine the ordering of the NACT calculations
+!----------------------------------------------------------------------
+    ipair=0
+
+    n=0
+    
+5   read(unit,'(a)',end=10) string
+    if (index(string,&
+         'Lagrangian multipliers are calculated for states').ne.0) then
+       n=n+1
+       read(string,'(59x,i2,2x,i2)') ipair(1,n),ipair(2,n)
+    endif
+
+    goto 5
+
+10  continue
+
+!----------------------------------------------------------------------
+! Read the in NACTs (multiplied by the energy differences)
+!----------------------------------------------------------------------
+    rewind(unit)
+
+    n=0
+
+15  read(unit,'(a)',end=20) string
+
+    if (index(string,'CI derivative coupling').ne.0) then
+
+       n=n+1
+
+       s1=ipair(1,n)
+       s2=ipair(2,n)
+
+       ! CI contribution
+       do i=1,7
+          read(unit,*)
+       enddo
+       do i=1,natm
+          read(unit,*) atmp,(nact_ci(j),j=i*3-2,i*3)
+       enddo
+
+       ! CSF contribution
+       do i=1,13
+          read(unit,*)
+       enddo
+       do i=1,natm
+          read(unit,*) atmp,(nact_csf(j),j=i*3-2,i*3)
+       enddo
+       
+       ! Total NACT
+       nact(:,s1,s2)=nact_ci+nact_csf
+       nact(:,s2,s1)=-nact(:,s1,s2)
+       
+    endif
+    
+    goto 15
+    
+20  continue
+    
+!----------------------------------------------------------------------
+! Close the Molcas output file
+!----------------------------------------------------------------------
+    close(unit)
+    
+    return
+    
+  end subroutine rdnact_molcas_rassscf
+    
 !######################################################################
 
   subroutine rddip
@@ -985,6 +1286,7 @@ contains
 !                     2 <-> CFOUR
 !                     3 <-> Hessian file
 !                     4 <-> Projection2 data file
+!                     5 <-> Turbomole, aoforce  
 !######################################################################
   subroutine freqtype
 
@@ -1019,6 +1321,9 @@ contains
     else if (isprojection2(freqfile)) then
        ! Projection2 data file
        freqtyp=4
+    else if (isaoforce(freqfile)) then
+       ! Turbomole, aoforce
+       freqtyp=5
     endif
 
 !----------------------------------------------------------------------
@@ -1040,6 +1345,7 @@ contains
 !
 !         qctyp = 4 <-> Columbus
 !                 5 <-> Turbomole, ricc2
+!                 6 <-> Molcas, RASSCF
 !######################################################################
   subroutine qctype
 
@@ -1064,6 +1370,9 @@ contains
     else if (isricc2(qcfile(1))) then
        ! Turbomole, ricc2
        qctyp=5
+    else if (ismolcasrasscf(qcfile(1))) then
+       ! Molcas, RASSCF
+       qctyp=6
     endif
 
 !----------------------------------------------------------------------
@@ -1086,6 +1395,10 @@ contains
     else if (qctyp.eq.5) then
        ! Turbomole, ricc2: gradients only
        lgrad=.true.
+    else if (qctyp.eq.6) then
+       ! Molcas, RASSCF: gradients and NACTs
+       lgrad=.true.
+       lnact=.true.
     endif
 
     return
@@ -1170,7 +1483,7 @@ contains
        goto 10
     endif
 
-!----------------------------------------------------------------------    
+!----------------------------------------------------------------------
 ! Close the output file
 !----------------------------------------------------------------------
     close(unit)
@@ -1183,6 +1496,62 @@ contains
 
   end function isricc2
 
+!######################################################################
+
+  function ismolcasrasscf(filename) result(found)
+
+    use constants
+    use iomod
+    
+    implicit none
+
+    integer            :: unit
+    character(len=*)   :: filename
+    character(len=120) :: string
+    logical            :: found,dir
+    
+!----------------------------------------------------------------------
+! First determine whether the 'file' is actually a file.
+! This is necessary as for certain programs, the name of a directory
+! will actually be passed instead
+!----------------------------------------------------------------------
+    inquire(file=trim(filename)//'/.',exist=dir)
+
+    if (dir) then
+       found=.false.
+       return
+    endif
+
+!----------------------------------------------------------------------
+! Open the output file
+!----------------------------------------------------------------------
+    call freeunit(unit)
+    open(unit,file=filename,form='formatted',status='old')
+
+!----------------------------------------------------------------------
+! Check whether this is a Molcas RASSCF calculation
+!----------------------------------------------------------------------
+10  read(unit,'(a)',end=999) string
+    if (index(string,&
+         '*              Molecular gradients               *').ne.0) then
+       found=.true.
+    else
+       goto 10
+    endif
+
+!----------------------------------------------------------------------
+! Close the output file
+!----------------------------------------------------------------------
+    close(unit)
+    
+    return
+
+999 continue
+    found=.false.
+    return
+    
+  end function ismolcasrasscf
+    
 !######################################################################
 
   function isg98(filename) result(found)
@@ -1371,6 +1740,62 @@ contains
     return
     
   end function isprojection2
+
+!######################################################################
+
+  function isaoforce (filename) result(found)
+
+    use constants
+    use iomod
+
+    implicit none
+
+    integer            :: unit
+    character(len=*)   :: filename
+    character(len=120) :: string
+    logical            :: found,dir
+
+!----------------------------------------------------------------------
+! First determine whether freqfile is actually a file.
+! This is necessary as for certain programs, the name of a directory
+! will actually be passed instead
+!----------------------------------------------------------------------
+    inquire(file=trim(filename)//'/.',exist=dir)
+
+    if (dir) then
+       found=.false.
+       return
+    endif
+
+!----------------------------------------------------------------------
+! Open file
+!----------------------------------------------------------------------
+    call freeunit(unit)
+    open(unit,file=filename,form='formatted',status='old')
+
+!----------------------------------------------------------------------
+! Check whether the calculation was performed using the aoforce
+! module in Turbomole
+!----------------------------------------------------------------------
+    found=.false.
+
+5   read(unit,'(a)',end=10) string
+    if (index(string,'a o f o r c e - program').ne.0) then
+       found=.true.
+    else
+       goto 5
+    endif
+
+10  continue
+    
+!----------------------------------------------------------------------
+! Close file
+!----------------------------------------------------------------------
+    close(unit)
+    
+    return
+    
+  end function isaoforce
     
 !######################################################################
 
@@ -1405,6 +1830,9 @@ contains
     else if (freqtyp.eq.4) then
        ! Projection2 data file
        call getxcoo_projection2(xcoo,freqfile)
+    else if (freqtyp.eq.5) then
+       ! Turbomole, aoforce
+       call getxcoo_aoforce(xcoo,freqfile)
     endif
 
 !----------------------------------------------------------------------
@@ -1644,7 +2072,59 @@ contains
     return
     
   end subroutine getxcoo_projection2
-    
+
+!######################################################################
+
+  subroutine getxcoo_aoforce(xcoo,filename)
+
+    use constants
+    use global
+    use iomod
+
+    implicit none
+  
+    integer                 :: unit,i,j
+    real*8, dimension(ncoo) :: xcoo
+    real*8                  :: ftmp
+    character(len=*)        :: filename
+    character(len=120)      :: string
+
+!----------------------------------------------------------------------
+! Open file
+!----------------------------------------------------------------------
+    call freeunit(unit)
+    open(unit,file=filename,form='formatted',status='old')
+
+!----------------------------------------------------------------------
+! Read the Cartesian coordinates
+!----------------------------------------------------------------------
+    ! Read to the coordinates section
+5   read(unit,'(a)',end=999) string
+    if (index(string,'atomic coordinates').eq.0) goto 5
+
+    ! Read the coordinates (in Bohr)
+    do i=1,natm
+       read(unit,'(x,3(2x,F12.8),4x,a2,9x,F6.4)') &
+            (xcoo(j), j=i*3-2,i*3),atlbl(i),ftmp
+       atnum(i)=int(ftmp)
+       mass(i*3-2:i*3)=num2mass(atnum(i))
+       call uppercase(atlbl(i)(1:1))
+    enddo
+
+!----------------------------------------------------------------------
+! Close file
+!----------------------------------------------------------------------
+    close(unit)
+
+    return
+
+999 continue
+    errmsg='The Cartesian coordinates could not be found in: '&
+         //trim(filename)
+    call error_control
+
+  end subroutine getxcoo_aoforce
+  
 !######################################################################
 
   subroutine getxcoo_ricc2(xcoo,filename)
@@ -1836,6 +2316,9 @@ contains
     else if (freqtyp.eq.4) then
        ! Projection2 data file
        call getmodes_projection2
+    else if (freqtyp.eq.5) then
+       ! Turbomole, aoforce
+       call getmodes_aoforce
     endif
 
 !----------------------------------------------------------------------
@@ -2238,6 +2721,153 @@ contains
     return
     
   end subroutine getmodes_projection2
+
+!######################################################################
+
+  subroutine getmodes_aoforce
+
+    use constants
+    use global
+    use iomod
+
+    implicit none
+
+    integer                           :: unit
+    integer                           :: i,j,k,ilbl,jlbl,nm,nblock,&
+                                         indx1,indx2,indx
+    real*8, dimension(ncoo,ncoo)      :: matrix1,matrix
+    real*8, dimension(ncoo)           :: freq1
+    character(len=3), dimension(ncoo) :: nmlab1
+    character(len=120)                :: string
+
+!----------------------------------------------------------------------
+! Open the frequency file
+!----------------------------------------------------------------------
+    call freeunit(unit)
+    open(unit,file=freqfile,form='formatted',status='old')
+
+!----------------------------------------------------------------------
+! Initialisation
+!----------------------------------------------------------------------
+    matrix=0.0d0
+
+!----------------------------------------------------------------------
+! Read in the normal modes
+! New: we will read in all 3N normal modes and later on filter out
+! those of zero frequency. This is necessary as imaginary frequency
+! modes come first in the AOFORCE output.
+!----------------------------------------------------------------------
+    ! No. blocks of normal modes in the output
+    nblock=ceiling(real(ncoo)/6)
+
+    ! Read to the start of the normal mode section
+5   read(unit,'(a)',end=100) string
+    if (index(string,'|dDIP/dQ|').eq.0) goto 5
+    do i=1,10
+       backspace(unit)
+    enddo
+
+    ! Read blocks of normal modes
+    do i=1,nblock
+
+       ! Indices of the first and last mode in the block
+       indx1=(i-1)*6+1
+       indx2=min(i*6,ncoo)
+
+       ! Frequencies: this is quite convoluted due to the fact
+       ! that the imaginary frequencies are printed as iomega,
+       ! so we need to detect and remove the i's.
+       do j=1,4
+          read(unit,*)
+       enddo
+       read(unit,'(20x,a)') string
+
+       do j=indx1,indx2
+          ! Trim off the leading whitespace
+          string=adjustl(string)
+          ! Start of the current frequency in the string
+          if (string(1:1).eq.'i') then
+             ilbl=2
+          else
+             ilbl=1
+          endif
+          ! End of the current frequency in the string
+          jlbl=index(string,' ')-1
+          ! Read in the frequency of the current mode
+          read(string(ilbl:jlbl),*) freq1(j)
+          ! Remove the current frequency from the string
+          do k=1,jlbl
+             string(k:k)=''
+          enddo
+       enddo
+
+       ! Symmetry labels
+       read(unit,*)
+       read(unit,'(19x,6(6x,a3))') (nmlab1(j),j=indx1,indx2)
+
+       ! Normal mode vectors
+       do j=1,8
+          read(unit,*)
+       enddo
+       do j=1,ncoo
+          read(unit,'(20x,6(F9.5))') matrix1(j,indx1:indx2)
+       enddo
+
+       ! Skip to the end of this block
+       read(unit,*)
+       read(unit,*)
+              
+    enddo
+    
+!----------------------------------------------------------------------
+! Close the frequency file
+!----------------------------------------------------------------------
+    close(unit)
+
+!----------------------------------------------------------------------
+! Filter out the zero frequency modes
+!----------------------------------------------------------------------
+    indx=0
+    do i=1,ncoo
+       if (freq1(i).eq.0.0d0) cycle
+       indx=indx+1
+       freq(indx)=freq1(i)
+       nmlab(indx)=nmlab1(i)
+       matrix(:,indx)=matrix1(:,i)
+    enddo
+
+!-----------------------------------------------------------------------
+! Scale to mass-weighted x to obtain true normal mode vectors
+!
+! N.B. This has to be done as aoforce prints the normal mode vectors
+!      in terms of non-mass-weighted Cartesians
+!-----------------------------------------------------------------------
+    do nm=1,nmodes
+       do j=1,ncoo
+          matrix(j,nm)=matrix(j,nm)*sqrt(mass(j))
+       enddo
+    enddo
+
+!-----------------------------------------------------------------------
+! Convert frequencies to eV
+!-----------------------------------------------------------------------
+    do i=1,nmodes
+       freq(i)=freq(i)*invcm2ev
+    enddo
+
+!-----------------------------------------------------------------------
+! Save the normal modes in the nmcoo array
+!-----------------------------------------------------------------------
+    nmcoo=matrix(1:ncoo,1:nmodes)
+
+    return
+
+100 continue
+    errmsg='The normal modes could not be found in the file: '&
+         //trim(freqfile)
+    call error_control
+
+  end subroutine getmodes_aoforce
     
 !######################################################################
 
@@ -2726,4 +3356,24 @@ contains
 
 !######################################################################
 
+  subroutine uppercase(string)
+      
+    implicit none
+    
+    integer*8    ::  i,j,length
+    character(*) :: string
+    
+    length=len(string)
+    
+    do j = 1,length
+       if(string(j:j).ge."a".and.string(j:j).le."z")&
+            string(j:j)=achar(iachar(string(j:j))-32)
+    enddo
+    
+    return
+
+  end subroutine uppercase
+  
+!######################################################################
+  
 end module ioqc
